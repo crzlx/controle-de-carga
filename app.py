@@ -12,7 +12,7 @@ def conectar_planilha():
     cliente = gspread.authorize(credenciais)
     
     # Aqui está o link exato da sua planilha inserido!
-    return cliente.open_by_url("https://docs.google.com/spreadsheets/d/1yHThW-nbcwxCcNTnb66PP1YHbHpCE9_ep3DC33-OZs4/edit?usp=sharing")
+    return cliente.open("Coletas")
 
 st.title("🚚 Gestão de Coletas")
 

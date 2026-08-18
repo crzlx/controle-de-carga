@@ -10,7 +10,9 @@ def conectar_planilha():
     cred_dict = json.loads(st.secrets["google_credentials"])
     credenciais = ServiceAccountCredentials.from_json_keyfile_dict(cred_dict, escopo)
     cliente = gspread.authorize(credenciais)
-    return cliente.open("Coletas")
+    
+    # Aqui está o link exato da sua planilha inserido!
+    return cliente.open_by_url("https://docs.google.com/spreadsheets/d/1yHThW-nbcwxCcNTnb66PP1YHbHpCE9_ep3DC33-OZs4/edit?usp=sharing")
 
 st.title("🚚 Gestão de Coletas")
 
@@ -47,8 +49,10 @@ with aba1:
                     nova_linha = [qtd, nota_nova, data_formatada, ""]
                     aba_sel.append_row(nova_linha)
                     st.success(f"✅ Nota {nota_nova} registrada e aguardando coleta!")
+                except gspread.WorksheetNotFound:
+                    st.error(f"❌ A aba '{transp_nova}' não foi encontrada nesta planilha. Crie a aba com este nome exato.")
                 except Exception as e:
-                    st.error("Erro ao salvar os dados. Verifique a conexão.")
+                    st.error(f"Erro ao salvar os dados. Detalhe: {e}")
 
 # --- SEGUNDA ABA: Dar baixa quando o caminhão chega ---
 with aba2:
@@ -82,5 +86,7 @@ with aba2:
                     st.success(f"✅ Coleta da nota {nota_baixa} confirmada para {coleta_formatada}!")
                 except gspread.CellNotFound:
                     st.error(f"❌ A Nota {nota_baixa} não foi encontrada na aba {transp_baixa}.")
+                except gspread.WorksheetNotFound:
+                    st.error(f"❌ A aba '{transp_baixa}' não foi encontrada.")
                 except Exception as e:
                     st.error(f"Erro ao atualizar os dados: {e}")

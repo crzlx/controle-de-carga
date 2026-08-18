@@ -11,7 +11,7 @@ def conectar_planilha():
     credenciais = ServiceAccountCredentials.from_json_keyfile_dict(cred_dict, escopo)
     cliente = gspread.authorize(credenciais)
     
-    # Aqui está o link exato da sua planilha inserido!
+    
     return cliente.open("Coletas")
 
 st.title("🚚 Gestão de Coletas")

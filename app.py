@@ -15,7 +15,7 @@ def conectar_planilha():
     cliente = gspread.authorize(credenciais)
     return cliente.open_by_url("https://docs.google.com/spreadsheets/d/1yHThW-nbcwxCcNTnb66PP1YHbHpCE9_ep3DC33-OZs4/edit?usp=sharing")
 
-# Função inteligente que lê todas as planilhas de uma vez para não travar o sistema
+# Função inteligente que lê todas as planilhas de uma vez
 def obter_dados_gerais():
     planilha = conectar_planilha()
     dados = []
@@ -74,7 +74,6 @@ with aba1:
                     aba_sel.append_row([qtd, nota_nova, data_formatada, ""])
                     st.success(f"✅ Nota {nota_nova} registrada na aba {transp_nova}!")
                     
-                    # Mensagem WPP ou Teams
                     if transp_nova == "FL":
                         st.info("💻 Transportadora FL selecionada. Envie o aviso manualmente pelo **Microsoft Teams**!")
                     else:
@@ -130,7 +129,7 @@ with aba3:
             pendentes = [d for d in dados if d["Data_Coleta"] == ""]
             
             if pendentes:
-                st.warning(f"🚚 Existem **{len(pendentes)}** notas paradas na filial.")
+                st.warning(f"🚚 Existem **{len(pendentes)}** notas paradas na doca.")
                 st.dataframe(pendentes, use_container_width=True, hide_index=True)
             else:
                 st.success("🎉 Nenhuma pendência!")
@@ -147,7 +146,6 @@ with aba4:
             coletadas_hoje = [d for d in dados if d["Data_Coleta"] == hoje]
             pendentes_total = [d for d in dados if d["Data_Coleta"] == ""]
             
-            # Blocos Visuais Grandes
             c1, c2, c3 = st.columns(3)
             c1.metric("📦 Lançadas Hoje", len(lancadas_hoje))
             c2.metric("✅ Coletadas Hoje", len(coletadas_hoje))
@@ -179,7 +177,6 @@ with aba5:
                 
                 if encontradas:
                     for nota in encontradas:
-                        # Define visual dependendo se está pendente ou não
                         status = "✅ Já Coletada" if nota["Data_Coleta"] != "" else "⏳ Aguardando Coleta na Doca"
                         cor_status = "#d4edda" if nota["Data_Coleta"] != "" else "#fff3cd"
                         cor_texto = "#155724" if nota["Data_Coleta"] != "" else "#856404"
@@ -197,35 +194,51 @@ with aba5:
                 else:
                     st.error("❌ Esta nota não foi encontrada em nenhuma transportadora.")
 
-# --- ABA 6: FECHAMENTO DO DIA ---
+# --- ABA 6: FECHAMENTO DO DIA (RELATÓRIO DETALHADO) ---
 with aba6:
     st.markdown("### 📋 Relatório")
-    st.markdown("Aperte o botão para gerar o texto do fim de turno automático.")
+    st.markdown("Aperte o botão para gerar o texto super detalhado do fim de turno.")
     
     if st.button("Gerar Relatório de Hoje", use_container_width=True):
-        with st.spinner("Montando relatório..."):
+        with st.spinner("Montando relatório analítico..."):
             dados = obter_dados_gerais()
             hoje = datetime.now().strftime("%d/%m/%Y")
             
             coletadas_hoje = [d for d in dados if d["Data_Coleta"] == hoje]
-            pendentes_total = len([d for d in dados if d["Data_Coleta"] == ""])
+            pendentes_lista = [d for d in dados if d["Data_Coleta"] == ""]
             
-            transp_hoje = {}
-            for d in coletadas_hoje:
-                t = d["Transportadora"]
-                transp_hoje[t] = transp_hoje.get(t, 0) + 1
+            texto_relatorio = f"📊 *FECHAMENTO DE COLETAS - {hoje}*\n\n"
             
-            texto_relatorio = f"*FECHAMENTO DE COLETAS - {hoje}*\n\n"
-            texto_relatorio += f"📦 *Total de Expedições Finalizadas:* {len(coletadas_hoje)} notas coletadas hoje.\n\n"
-            
-            if transp_hoje:
-                texto_relatorio += "*Divisão por Transportadora:*\n"
-                for transp, qtd in transp_hoje.items():
-                    texto_relatorio += f" - {transp}: {qtd} nota(s)\n"
-            else:
-                texto_relatorio += "Nenhuma transportadora realizou coleta hoje.\n"
+            # --- SEÇÃO 1: COLETADAS HOJE ---
+            texto_relatorio += f"✅ *COLETAS FINALIZADAS HOJE:* {len(coletadas_hoje)} nota(s)\n"
+            if coletadas_hoje:
+                agrupado_coletadas = {}
+                for d in coletadas_hoje:
+                    t = d["Transportadora"]
+                    agrupado_coletadas.setdefault(t, []).append(f"Nº {d['Nota']} ({d['QTD']} vol)")
                 
-            texto_relatorio += f"\n⏳ *Ficam pendentes na filial:* {pendentes_total} notas no total.\n"
+                for transp, notas in agrupado_coletadas.items():
+                    texto_relatorio += f"\n🚛 *{transp}* ({len(notas)}):\n"
+                    texto_relatorio += f"   ↳ {', '.join(notas)}\n"
+            else:
+                texto_relatorio += "Nenhuma coleta registrada hoje.\n"
+                
+            texto_relatorio += "\n" + "-"*30 + "\n\n"
             
-            st.success("Relatório gerado! Clique dentro da caixa abaixo, copie e cole no WhatsApp/Teams.")
-            st.text_area("Texto Copiável:", value=texto_relatorio, height=250)
+            # --- SEÇÃO 2: PENDÊNCIAS NA DOCA ---
+            texto_relatorio += f"⏳ *PENDÊNCIAS NA FILIAL:* {len(pendentes_lista)} nota(s) aguardando\n"
+            if pendentes_lista:
+                agrupado_pendentes = {}
+                for d in pendentes_lista:
+                    t = d["Transportadora"]
+                    agrupado_pendentes.setdefault(t, []).append(f"Nº {d['Nota']} ({d['QTD']} vol - req: {d['Data_Emissao']})")
+                
+                for transp, notas in agrupado_pendentes.items():
+                    texto_relatorio += f"\n⚠️ *{transp}* ({len(notas)}):\n"
+                    for n in notas:
+                        texto_relatorio += f"   ↳ {n}\n"
+            else:
+                texto_relatorio += "Nenhuma pendência!🎉\n"
+            
+            st.success("Relatório detalhado gerado! Clique dentro da caixa abaixo, copie e cole no WhatsApp/Teams.")
+            st.text_area("Texto Copiável:", value=texto_relatorio, height=450)

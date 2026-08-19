@@ -7,6 +7,8 @@ from datetime import datetime
 import google.generativeai as genai
 import smtplib
 from email.message import EmailMessage
+import csv
+import io
 
 # Configuração da Página
 st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="centered")
@@ -14,7 +16,7 @@ st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="cent
 # ==========================================
 # FUNÇÃO DO ROBÔ DE E-MAILS
 # ==========================================
-def disparar_email_silencioso(transportadora, nota, qtd):
+def disparar_email_silencioso(transportadora, nota, qtd, lembrete=False):
     try:
         remetente = st.secrets["EMAIL_REMETENTE"]
         senha = st.secrets["SENHA_EMAIL"]
@@ -31,11 +33,27 @@ def disparar_email_silencioso(transportadora, nota, qtd):
         # O código só dispara se tiver um e-mail válido configurado
         if destinatario and "teste.com" not in destinatario.lower():
             msg = EmailMessage()
-            msg['Subject'] = f"Nova Coleta Liberada - Speedmax (Nota: {nota})"
-            msg['From'] = remetente
-            msg['To'] = destinatario 
             
-            corpo_email = f"""
+            # Muda o texto dependendo se é primeira cobrança ou re-cobrança (Lembrete)
+            if lembrete:
+                msg['Subject'] = f"LEMBRETE URGENTE: Coleta Pendente - Speedmax (Nota: {nota})"
+                corpo_email = f"""
+Olá, equipe da {transportadora}!
+
+Este é um LEMBRETE de que temos mercadoria separada há um tempo aguardando coleta na filial Speedmax.
+
+DETALHES DA COLETA PENDENTE:
+- Nota Fiscal: {nota}
+- Quantidade de Volumes: {qtd}
+
+Por favor, priorizem a programação desta coleta o mais rápido possível.
+
+Atenciosamente,
+Logística Speedmax.
+                """
+            else:
+                msg['Subject'] = f"Nova Coleta Liberada - Speedmax (Nota: {nota})"
+                corpo_email = f"""
 Olá, equipe da {transportadora}!
 
 Temos uma nova mercadoria separada e liberada para coleta na filial Speedmax.
@@ -48,7 +66,10 @@ Por favor, programem a coleta assim que possível.
 
 Atenciosamente,
 Logística Speedmax.
-            """
+                """
+                
+            msg['From'] = remetente
+            msg['To'] = destinatario 
             msg.set_content(corpo_email)
             
             with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
@@ -144,8 +165,9 @@ st.title("🚚 Expedição Campos Dos Goytacazes")
 
 transportadoras = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
 
-aba1, aba2, aba3 = st.tabs([
-    "📦 Movimentação", "📊 Painel da Filial", "🔍 Consulta Rápida"
+# Adicionada a 4ª Aba de Gerenciamento!
+aba1, aba2, aba3, aba4 = st.tabs([
+    "📦 Movimentação", "📊 Painel da Filial", "🔍 Consulta Rápida", "⚙️ Gerenciar & Cobrar"
 ])
 
 # ==========================================
@@ -181,7 +203,7 @@ with aba1:
                     aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao])
                     st.success(f"✅ Nota {nota_nova} registrada com sucesso na aba {transp_nova}!")
                     
-                    # LOGICA NOVA: Bloqueia e-mail para a FL e avisa sobre o Teams
+                    # LOGICA: Bloqueia e-mail para a FL e avisa sobre o Teams
                     if transp_nova == "FL":
                         st.info("💻 **ATENÇÃO:** O aviso para a transportadora FL deve ser enviado manualmente pelo **Microsoft Teams**!")
                     else:
@@ -260,10 +282,11 @@ with aba2:
     if st.button("🔄 Atualizar Painel e Gerar Relatório", use_container_width=True):
         with st.spinner("Analisando as planilhas..."):
             dados = obter_dados_gerais()
-            hoje = datetime.now().strftime("%d/%m/%Y")
+            hoje_dt = datetime.now()
+            hoje_str = hoje_dt.strftime("%d/%m/%Y")
             
-            lancadas_hoje = [d for d in dados if d["Data_Solicitacao"] == hoje]
-            coletadas_hoje = [d for d in dados if d["Data_Coleta"] == hoje]
+            lancadas_hoje = [d for d in dados if d["Data_Solicitacao"] == hoje_str]
+            coletadas_hoje = [d for d in dados if d["Data_Coleta"] == hoje_str]
             pendentes_lista = [d for d in dados if d["Data_Coleta"] == ""]
             
             st.markdown("---")
@@ -272,18 +295,41 @@ with aba2:
             c2.metric("✅ Coletadas Hoje", len(coletadas_hoje))
             c3.metric("⏳ Paradas na Filial", len(pendentes_lista))
             
+            # NOVO: Gráfico Minimalista
+            st.markdown("---")
+            st.subheader("📈 Cargas Pendentes por Transportadora")
+            contagem_transp = {t: 0 for t in transportadoras}
+            for p in pendentes_lista:
+                contagem_transp[p["Transportadora"]] += 1
+            st.bar_chart(contagem_transp)
+            
             st.markdown("---")
             st.subheader("🚛 Mercadorias Aguardando Coleta")
             if pendentes_lista:
                 st.warning(f"Temos **{len(pendentes_lista)}** notas no galpão aguardando as transportadoras.")
-                st.dataframe(pendentes_lista, use_container_width=True, hide_index=True)
+                
+                # NOVO: Calculador de SLA de Atraso
+                lista_sla = []
+                for p in pendentes_lista:
+                    item = dict(p)
+                    try:
+                        data_sol = datetime.strptime(p["Data_Solicitacao"], "%d/%m/%Y")
+                        dias_parado = (hoje_dt - data_sol).days
+                        if dias_parado == 0: item["SLA (Status)"] = "🟢 Hoje"
+                        elif dias_parado == 1: item["SLA (Status)"] = "🟡 1 dia parado"
+                        else: item["SLA (Status)"] = f"🔴 {dias_parado} dias parado"
+                    except:
+                        item["SLA (Status)"] = "⚪ N/A"
+                    lista_sla.append(item)
+                    
+                st.dataframe(lista_sla, use_container_width=True, hide_index=True)
             else:
                 st.success("🎉 Nenhuma pendência! O estoque está 100% limpo.")
 
             st.markdown("---")
             st.subheader("📋 Resumo do Turno (Copiar e Colar)")
             
-            texto_relatorio = f"📊 *FECHAMENTO DE COLETAS - {hoje}*\n\n"
+            texto_relatorio = f"📊 *FECHAMENTO DE COLETAS - {hoje_str}*\n\n"
             
             texto_relatorio += f"✅ *COLETAS FINALIZADAS HOJE:* {len(coletadas_hoje)} nota(s)\n"
             if coletadas_hoje:
@@ -315,6 +361,23 @@ with aba2:
                 texto_relatorio += "Nenhuma pendência! Galpão limpo. 🎉\n"
             
             st.text_area("Texto Copiável:", value=texto_relatorio, height=350)
+            
+            # NOVO: Exportar para CSV
+            st.markdown("---")
+            st.subheader("💾 Exportar Banco de Dados")
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=["Transportadora", "QTD", "Nota", "Data_Solicitacao", "Data_Coleta", "Data_Emissao_Nota"])
+            writer.writeheader()
+            writer.writerows(dados)
+            csv_bytes = output.getvalue().encode('utf-8')
+            
+            st.download_button(
+                label="📥 Baixar Histórico Completo (Excel/CSV)",
+                data=csv_bytes,
+                file_name=f"relatorio_coletas_{hoje_str.replace('/','-')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
 
 # ==========================================
 # ABA 3: CONSULTA RÁPIDA
@@ -348,3 +411,80 @@ with aba3:
                         """, unsafe_allow_html=True)
                 else:
                     st.error("❌ Esta nota não foi encontrada em nenhuma das planilhas.")
+
+# ==========================================
+# ABA 4: GERENCIAR E COBRAR (NOVA ABA)
+# ==========================================
+with aba4:
+    st.markdown("### ⚙️ Corrigir, Excluir ou Re-cobrar")
+    st.markdown("Encontrou um erro de digitação? A nota foi cancelada? A transportadora está atrasada? Resolva por aqui.")
+    
+    nota_alvo = st.text_input("Digite a Nota Fiscal que deseja gerenciar:")
+    
+    if st.button("Buscar Registro", use_container_width=True):
+        if nota_alvo:
+            with st.spinner("Buscando..."):
+                dados = obter_dados_gerais()
+                encontradas = [d for d in dados if d["Nota"] == nota_alvo.strip()]
+                
+                if encontradas:
+                    # Salva a nota na sessão para a tela não sumir ao clicar nos botões
+                    st.session_state['nota_gerenciar'] = encontradas[0]
+                else:
+                    st.error("❌ Nota não encontrada no banco de dados.")
+                    if 'nota_gerenciar' in st.session_state:
+                        del st.session_state['nota_gerenciar']
+                        
+    if 'nota_gerenciar' in st.session_state:
+        n = st.session_state['nota_gerenciar']
+        st.info(f"Gerenciando Nota: **{n['Nota']}** pertencente à **{n['Transportadora']}**")
+        
+        c_btn1, c_btn2 = st.columns(2)
+        with c_btn1:
+            if st.button("🔔 Enviar Lembrete (Re-cobrar)", use_container_width=True):
+                if n["Transportadora"] == "FL":
+                    st.warning("⚠️ O lembrete para a FL deve ser enviado manualmente pelo Teams!")
+                else:
+                    with st.spinner("Disparando e-mail de alerta..."):
+                        res = disparar_email_silencioso(n["Transportadora"], n["Nota"], n["QTD"], lembrete=True)
+                        if res is True: 
+                            st.success("✅ E-mail de cobrança enviado com urgência!")
+                        else: 
+                            st.error("❌ Erro ao tentar enviar o e-mail.")
+        with c_btn2:
+            if st.button("🗑️ Excluir Registro", type="primary", use_container_width=True):
+                with st.spinner("Apagando da planilha..."):
+                    try:
+                        planilha = conectar_planilha()
+                        aba = planilha.worksheet(n["Transportadora"])
+                        cel = aba.find(n["Nota"])
+                        aba.delete_rows(cel.row)
+                        st.success("✅ Registro apagado com sucesso!")
+                        del st.session_state['nota_gerenciar']
+                    except Exception as e:
+                        st.error(f"Erro: {e}")
+                        
+        with st.expander("✏️ Editar Informações (Erros de Digitação)"):
+            with st.form("form_editar"):
+                nova_qtd = st.text_input("QTD Volumes", value=n["QTD"])
+                nova_emissao = st.text_input("Data de Emissão (NFe)", value=n["Data_Emissao_Nota"])
+                nova_sol = st.text_input("Data de Solicitação", value=n["Data_Solicitacao"])
+                nova_coleta = st.text_input("Data de Coleta (Apague para voltar a ficar pendente)", value=n["Data_Coleta"])
+                
+                if st.form_submit_button("Salvar Novas Informações", use_container_width=True):
+                    with st.spinner("Atualizando planilha..."):
+                        try:
+                            planilha = conectar_planilha()
+                            aba = planilha.worksheet(n["Transportadora"])
+                            cel = aba.find(n["Nota"])
+                            
+                            # Atualiza célula por célula para evitar quebra no Gspread
+                            aba.update_cell(cel.row, 1, nova_qtd)
+                            aba.update_cell(cel.row, 3, nova_sol)
+                            aba.update_cell(cel.row, 4, nova_coleta)
+                            aba.update_cell(cel.row, 5, nova_emissao)
+                            
+                            st.success("✅ Informações atualizadas perfeitamente!")
+                            del st.session_state['nota_gerenciar']
+                        except Exception as e:
+                            st.error(f"Erro ao atualizar: {e}")

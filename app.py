@@ -199,7 +199,7 @@ with aba5:
 
 # --- ABA 6: FECHAMENTO DO DIA ---
 with aba6:
-    st.markdown("### 📋 Resumo para o Gestor")
+    st.markdown("### 📋 Relatório")
     st.markdown("Aperte o botão para gerar o texto do fim de turno automático.")
     
     if st.button("Gerar Relatório de Hoje", use_container_width=True):

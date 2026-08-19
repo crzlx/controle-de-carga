@@ -16,11 +16,9 @@ st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="cent
 # ==========================================
 def disparar_email_silencioso(transportadora, nota, qtd):
     try:
-        # Puxa o remetente e a senha dos Secrets do Streamlit
         remetente = st.secrets["EMAIL_REMETENTE"]
         senha = st.secrets["SENHA_EMAIL"]
         
-        # LISTA DE E-MAILS DAS TRANSPORTADORAS (Separe por vírgula para mandar para vários!)
         emails_destino = {
             "JARBAS": "adm.campos@italogrj.com.br",
             "TRANSCHERRER": "filial.campos@transcherrer.com.br, cidy.neves@transcherrer.com.br, filial.campos02@transcherrer.com.br",
@@ -30,15 +28,12 @@ def disparar_email_silencioso(transportadora, nota, qtd):
         
         destinatario = emails_destino.get(transportadora)
         
-        # O código só dispara se não for o texto de "teste" padrão
         if destinatario and "teste.com" not in destinatario.lower() or transportadora == "TRANSCHERRER" or transportadora == "JARBAS":
-            # Monta o visual da mensagem
             msg = EmailMessage()
             msg['Subject'] = f"Nova Coleta Liberada - Speedmax (Nota: {nota})"
             msg['From'] = remetente
-            msg['To'] = destinatario # A vírgula aqui dentro faz o envio múltiplo automaticamente
+            msg['To'] = destinatario 
             
-            # TEXTO DO E-MAIL ATUALIZADO
             corpo_email = f"""
 Olá, equipe da {transportadora}!
 
@@ -55,7 +50,6 @@ Logística Speedmax.
             """
             msg.set_content(corpo_email)
             
-            # Faz o envio invisível usando o servidor do Google
             with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
                 smtp.login(remetente, senha)
                 smtp.send_message(msg)
@@ -175,7 +169,6 @@ with aba1:
                 st.warning("⚠️ Preencha o número da Nota.")
             else:
                 try:
-                    # 1. Salva na Planilha
                     planilha = conectar_planilha()
                     aba_sel = planilha.worksheet(transp_nova)
                     data_formatada = data_emissao.strftime("%d/%m/%Y")
@@ -183,7 +176,6 @@ with aba1:
                     aba_sel.append_row([qtd, nota_nova, data_formatada, ""])
                     st.success(f"✅ Nota {nota_nova} registrada com sucesso na aba {transp_nova}!")
                     
-                    # 2. Dispara o E-mail Silencioso
                     resultado_email = disparar_email_silencioso(transp_nova, nota_nova, qtd)
                     if resultado_email is True:
                         st.info(f"📧 E-mail enviado automaticamente para a equipe da {transp_nova}!")
@@ -197,34 +189,63 @@ with aba1:
 
     st.markdown("---")
     
-    st.header("✅ Confirmar Coleta")
-    st.markdown("Dê a baixa quando o caminhão vier levar a mercadoria.")
+    # ==========================================
+    # NOVO SISTEMA DE BAIXA INTELIGENTE
+    # ==========================================
+    st.header("✅ Confirmar Coleta em Lote")
+    st.markdown("Selecione o caminhão e marque as notas que ele está levando hoje.")
     
-    with st.form("form_baixa", clear_on_submit=True):
-        transp_baixa = st.selectbox("Transportadora (Baixa)", transportadoras, key="t2")
-        col3, col4 = st.columns(2)
-        with col3:
-            nota_baixa = st.text_input("Nota (Nº) para baixar")
-        with col4:
-            data_coleta = st.date_input("Data da Coleta Real", format="DD/MM/YYYY")
+    # O seletor fica fora do formulário para atualizar a lista automaticamente
+    transp_baixa = st.selectbox("Transportadora (Baixa)", transportadoras, key="t2")
+    
+    dados_totais = obter_dados_gerais()
+    # Filtra apenas as notas da transportadora escolhida que ainda não têm data de coleta
+    pendentes_transp = [d for d in dados_totais if d["Transportadora"] == transp_baixa and d["Data_Coleta"] == ""]
+    
+    if pendentes_transp:
+        with st.form("form_baixa"):
+            st.markdown(f"📦 **Notas pendentes na doca ({transp_baixa}):**")
             
-        enviar_baixa = st.form_submit_button("Confirmar Baixa", use_container_width=True)
-        
-        if enviar_baixa:
-            if nota_baixa == "":
-                st.warning("⚠️ Preencha a Nota.")
-            else:
-                try:
-                    planilha = conectar_planilha()
-                    aba_sel = planilha.worksheet(transp_baixa)
-                    celula = aba_sel.find(nota_baixa)
-                    coleta_formatada = data_coleta.strftime("%d/%m/%Y")
-                    aba_sel.update_cell(celula.row, 4, coleta_formatada)
-                    st.success(f"✅ Baixa da nota {nota_baixa} confirmada para {coleta_formatada}!")
-                except gspread.CellNotFound:
-                    st.error(f"❌ Nota {nota_baixa} não encontrada na {transp_baixa}.")
-                except Exception as e:
-                    st.error(f"Erro: {e}")
+            # Cria os checkboxes dinamicamente
+            checkboxes_notas = {}
+            for p in pendentes_transp:
+                label = f"Nº {p['Nota']} — {p['QTD']} volumes (Solicitada em: {p['Data_Emissao']})"
+                checkboxes_notas[p['Nota']] = st.checkbox(label)
+                
+            st.markdown("---")
+            # Uma única data para todas as selecionadas
+            data_coleta = st.date_input("Data da Coleta Real (para as selecionadas acima)", format="DD/MM/YYYY")
+            
+            enviar_baixa = st.form_submit_button("Confirmar Baixa nas Selecionadas", use_container_width=True)
+            
+            if enviar_baixa:
+                notas_selecionadas = [nota for nota, marcada in checkboxes_notas.items() if marcada]
+                
+                if not notas_selecionadas:
+                    st.warning("⚠️ Você precisa marcar pelo menos uma caixinha para dar baixa.")
+                else:
+                    with st.spinner(f"Dando baixa em {len(notas_selecionadas)} nota(s)..."):
+                        try:
+                            planilha = conectar_planilha()
+                            aba_sel = planilha.worksheet(transp_baixa)
+                            coleta_formatada = data_coleta.strftime("%d/%m/%Y")
+                            
+                            for nota in notas_selecionadas:
+                                celula = aba_sel.find(nota)
+                                aba_sel.update_cell(celula.row, 4, coleta_formatada)
+                                
+                            st.success(f"✅ Baixa confirmada para as notas: {', '.join(notas_selecionadas)}!")
+                            
+                            # Atualiza a tela para as notas desaparecerem da lista imediatamente
+                            try:
+                                st.rerun()
+                            except AttributeError:
+                                st.experimental_rerun()
+                                
+                        except Exception as e:
+                            st.error(f"Erro ao dar baixa: {e}")
+    else:
+        st.success(f"🎉 O galpão está limpo! Nenhuma nota pendente para a {transp_baixa}.")
 
 # ==========================================
 # ABA 2: PAINEL DA FILIAL

@@ -166,7 +166,7 @@ st.title("🚚 Expedição Campos Dos Goytacazes")
 
 transportadoras = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
 
-# Adicionada a 4ª Aba de Gerenciamento!
+# As 4 Abas declaradas juntas aqui!
 aba1, aba2, aba3, aba4 = st.tabs([
     "📦 Movimentação", "📊 Painel da Filial", "🔍 Consulta Rápida", "⚙️ Gerenciar & Cobrar"
 ])
@@ -204,7 +204,6 @@ with aba1:
                     aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao])
                     st.success(f"✅ Nota {nota_nova} registrada com sucesso na aba {transp_nova}!")
                     
-                    # LOGICA: Bloqueia e-mail para a FL e avisa sobre o Teams
                     if transp_nova == "FL":
                         st.info("💻 **ATENÇÃO:** O aviso para a transportadora FL deve ser enviado manualmente pelo **Microsoft Teams**!")
                     else:
@@ -296,7 +295,6 @@ with aba2:
             c2.metric("✅ Coletadas Hoje", len(coletadas_hoje))
             c3.metric("⏳ Paradas na Filial", len(pendentes_lista))
             
-            # NOVO: Gráfico Minimalista (Agora com os nomes corretos usando Pandas!)
             st.markdown("---")
             st.subheader("📈 Cargas Pendentes por Transportadora")
             contagem_transp = {t: 0 for t in transportadoras}
@@ -314,7 +312,6 @@ with aba2:
             if pendentes_lista:
                 st.warning(f"Temos **{len(pendentes_lista)}** notas no galpão aguardando as transportadoras.")
                 
-                # Calculador de SLA de Atraso
                 lista_sla = []
                 for p in pendentes_lista:
                     item = dict(p)
@@ -357,7 +354,6 @@ with aba2:
                 agrupado_pendentes = {}
                 for d in pendentes_lista:
                     t = d["Transportadora"]
-                    # NOVO: Adicionada a data de emissão no texto copiável!
                     agrupado_pendentes.setdefault(t, []).append(f"Nº {d['Nota']} ({d['QTD']} vol - emissão: {d['Data_Emissao_Nota']} - req: {d['Data_Solicitacao']})")
                 
                 for transp, notas in agrupado_pendentes.items():
@@ -369,7 +365,6 @@ with aba2:
             
             st.text_area("Texto Copiável:", value=texto_relatorio, height=350)
             
-            # Exportar para CSV
             st.markdown("---")
             st.subheader("💾 Exportar Banco de Dados")
             output = io.StringIO()
@@ -387,7 +382,40 @@ with aba2:
             )
 
 # ==========================================
-# ABA 4: GERENCIAR E COBRAR (NOVA ABA)
+# ABA 3: CONSULTA RÁPIDA
+# ==========================================
+with aba3:
+    st.markdown("### 🔍 Pesquisa de Status")
+    nota_busca = st.text_input("Digite o Número da Nota:")
+    
+    if st.button("Procurar Nota", use_container_width=True):
+        if nota_busca:
+            with st.spinner("Buscando no histórico..."):
+                dados = obter_dados_gerais()
+                encontradas = [d for d in dados if d["Nota"] == nota_busca.strip()]
+                
+                if encontradas:
+                    for nota in encontradas:
+                        status = "✅ Já Coletada" if nota["Data_Coleta"] != "" else "⏳ Aguardando no Galpão"
+                        cor_status = "#d4edda" if nota["Data_Coleta"] != "" else "#fff3cd"
+                        cor_texto = "#155724" if nota["Data_Coleta"] != "" else "#856404"
+                        
+                        st.markdown(f"""
+                        <div style="background-color: {cor_status}; color: {cor_texto}; padding: 15px; border-radius: 10px; margin-top: 10px;">
+                            <h4 style="margin-top:0;">Nota: {nota['Nota']}</h4>
+                            <b>Status:</b> {status}<br>
+                            <b>Transportadora:</b> {nota['Transportadora']}<br>
+                            <b>QTD Volumes:</b> {nota['QTD']}<br>
+                            <b>Emissão da NFe:</b> {nota['Data_Emissao_Nota']}<br>
+                            <b>Solicitada Coleta em:</b> {nota['Data_Solicitacao']}<br>
+                            <b>Coletada em:</b> {nota['Data_Coleta'] if nota['Data_Coleta'] != "" else "Ainda na filial"}
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.error("❌ Esta nota não foi encontrada em nenhuma das planilhas.")
+
+# ==========================================
+# ABA 4: GERENCIAR E COBRAR
 # ==========================================
 with aba4:
     st.markdown("### ⚙️ Corrigir, Excluir ou Re-cobrar")

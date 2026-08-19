@@ -130,10 +130,10 @@ with aba3:
             pendentes = [d for d in dados if d["Data_Coleta"] == ""]
             
             if pendentes:
-                st.warning(f"🚚 Existem **{len(pendentes)}** notas paradas na doca.")
+                st.warning(f"🚚 Existem **{len(pendentes)}** notas paradas na filial.")
                 st.dataframe(pendentes, use_container_width=True, hide_index=True)
             else:
-                st.success("🎉 Nenhuma pendência! A doca está limpa.")
+                st.success("🎉 Nenhuma pendência!")
 
 # --- ABA 4: DASHBOARD MINIMALISTA ---
 with aba4:

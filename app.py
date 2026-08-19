@@ -160,7 +160,7 @@ def obter_dados_gerais():
     return dados
 
 # ==========================================
-# 🤖 CHATBOT FLUTUANTE (MODAL CENTRAL) - VERSÃO LIVRE
+# 🤖 CHATBOT FLUTUANTE (MODAL CENTRAL) 
 # ==========================================
 @st.dialog("🤖 Chat com Alessandro IA")
 def abrir_chat_ia():
@@ -183,14 +183,15 @@ def abrir_chat_ia():
                 with st.spinner("Analisando e processando..."):
                     try:
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                        modelo = genai.GenerativeModel('gemini-3.6-flash')
+                        # Motor de IA alterado para o modelo flash moderno (evita erros e é mais rápido)
+                        modelo = genai.GenerativeModel('gemini-1.5-flash')
+                        
                         dados_estoque = obter_dados_gerais()
                         hoje = datetime.now().strftime("%d/%m/%Y")
                         dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Solicitacao"] == hoje]
                         
                         historico = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-6:]])
                         
-                        # NOVO CÉREBRO DO ALESSANDRO (Mais liberdade e versatilidade)
                         prompt = f"""
                         Você é o Alessandro IA, um assistente virtual avançado e extremamente versátil da filial Speedmax em Campos dos Goytacazes.
                         Seu papel vai muito além de apenas ler planilhas: você é um conselheiro estratégico para o dia a dia da operação. Você ajuda na logística, expedição, mas também tem total liberdade para dar dicas de vendas, atendimento ao cliente, redação de e-mails, gestão de tempo e resolução de problemas operacionais gerais.
@@ -213,7 +214,13 @@ def abrir_chat_ia():
                         st.session_state.chat_history.append({"role": "assistant", "content": resposta.text})
                         
                     except Exception as e:
-                        erro_msg = f"❌ Ocorreu um erro ao consultar: {e}"
+                        erro_str = str(e)
+                        # CAPTURA AMIGÁVEL DO ERRO 429 (Limite Excedido)
+                        if "429" in erro_str or "Quota" in erro_str:
+                            erro_msg = "⏳ **Ops! Muitos acessos ao mesmo tempo.**\n\nO limite do plano gratuito foi atingido por um instante. Por favor, **aguarde 1 minuto** e me faça a pergunta novamente!"
+                        else:
+                            erro_msg = f"❌ Ocorreu um erro ao consultar: {e}"
+                            
                         st.error(erro_msg)
                         st.session_state.chat_history.append({"role": "assistant", "content": erro_msg})
 

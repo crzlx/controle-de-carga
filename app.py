@@ -15,6 +15,70 @@ import pandas as pd
 st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="wide")
 
 # ==========================================
+# 🎨 CAMADA DE ESTILIZAÇÃO E ANIMAÇÕES CSS
+# ==========================================
+css_moderno = """
+<style>
+/* Animação suave de entrada para a página inteira */
+@keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.main .block-container {
+    animation: fadeSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Efeito moderno de CLIQUE e HOVER nos Botões */
+div.stButton > button {
+    transition: all 0.2s ease !important;
+    border-radius: 8px !important;
+}
+div.stButton > button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1) !important;
+}
+div.stButton > button:active {
+    transform: scale(0.95) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Efeito hover nas Métricas do Dashboard */
+div[data-testid="stMetric"] {
+    transition: all 0.3s ease !important;
+    padding: 10px !important;
+    border-radius: 10px !important;
+}
+div[data-testid="stMetric"]:hover {
+    background-color: rgba(0,0,0,0.02) !important;
+    transform: translateY(-3px) !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Animação de entrada fluida para os avisos (Sucesso, Erro, Alertas) */
+@keyframes popIn {
+    0% { opacity: 0; transform: scale(0.95); }
+    100% { opacity: 1; transform: scale(1); }
+}
+div[data-testid="stAlert"] {
+    animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 10px !important;
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+}
+
+/* Efeito de foco (Focus) suave nos campos de digitação */
+div[data-baseweb="input"] > div, div[data-baseweb="select"] > div {
+    transition: all 0.3s ease !important;
+    border-radius: 8px !important;
+}
+div[data-baseweb="input"] > div:focus-within, div[data-baseweb="select"] > div:focus-within {
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2) !important;
+}
+</style>
+"""
+st.markdown(css_moderno, unsafe_allow_html=True)
+
+# ==========================================
 # FUNÇÃO DO ROBÔ DE E-MAILS
 # ==========================================
 def disparar_email_silencioso(transportadora, nota, qtd, lembrete=False, prioridade="Normal"):
@@ -33,7 +97,6 @@ def disparar_email_silencioso(transportadora, nota, qtd, lembrete=False, priorid
         if destinatario and "teste.com" not in destinatario.lower():
             msg = EmailMessage()
             
-            # Formatação baseada na prioridade
             alerta_urgencia = "[URGENTE] " if "URGENTE" in prioridade else ""
             
             if lembrete:
@@ -131,7 +194,7 @@ def obter_dados_gerais():
 # ==========================================
 with st.sidebar:
     st.header("👤 Operador do Sistema")
-    usuario_atual = st.selectbox("Quem está utilizando o aplicativo?", ["Alessandro", "Pedro"])
+    usuario_atual = st.selectbox("Quem está utilizando o aplicativo?", ["Almoxarife", "Pedro (Gestão)", "Outro"])
     
     st.markdown("---")
     st.header("🤖 Alessandro IA")
@@ -181,7 +244,7 @@ aba1, aba2, aba3, aba4 = st.tabs([
 # ==========================================
 with aba1:
     st.header("📝 Lançar Nova Solicitação")
-    st.markdown("Registre a nota separada. O sistema já gravará que o lançamento foi feito por: **" + usuario_atual + "**.")
+    st.markdown(f"Registre a nota separada. O sistema já gravará que o lançamento foi feito por: **{usuario_atual}**.")
     
     with st.form("form_nova", clear_on_submit=True):
         col_t, col_p = st.columns([2, 1])
@@ -211,7 +274,6 @@ with aba1:
                     formatada_solicitacao = data_solicitacao.strftime("%d/%m/%Y")
                     formatada_emissao = data_emissao.strftime("%d/%m/%Y")
                     
-                    # Salva: QTD, NOTA, D.SOL, D.COL(vazio), D.EMI, USUARIO_LANC, PRIORIDADE
                     aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao, usuario_atual, prioridade])
                     st.success(f"✅ Nota {nota_nova} registrada com sucesso!")
                     
@@ -247,7 +309,7 @@ with aba1:
                 
             st.markdown("---")
             data_coleta = st.date_input("Data da Coleta Real", format="DD/MM/YYYY")
-            enviar_baixa = st.form_submit_button("Confirmar Baixa (Registrar como " + usuario_atual + ")", use_container_width=True)
+            enviar_baixa = st.form_submit_button(f"Confirmar Baixa (Registrar como {usuario_atual})", use_container_width=True)
             
             if enviar_baixa:
                 notas_selecionadas = [nota for nota, marcada in checkboxes_notas.items() if marcada]
@@ -262,8 +324,8 @@ with aba1:
                             
                             for nota in notas_selecionadas:
                                 celula = aba_sel.find(nota)
-                                aba_sel.update_cell(celula.row, 4, coleta_formatada) # Atualiza Data_Coleta
-                                aba_sel.update_cell(celula.row, 8, usuario_atual)    # Grava Usuario_Baixa na coluna H
+                                aba_sel.update_cell(celula.row, 4, coleta_formatada)
+                                aba_sel.update_cell(celula.row, 8, usuario_atual)
                                 
                             st.success(f"✅ Baixa confirmada!")
                             try:
@@ -291,47 +353,37 @@ with aba2:
             dados = obter_dados_gerais()
             hoje_dt = datetime.now()
             
-            # Arrays para alimentar o painel baseado no filtro
             lancadas_periodo = []
             coletadas_periodo = []
             pendentes_gerais = []
-            
-            # Ranking SLA Base data
             tempos_coleta = {t: [] for t in transportadoras}
             
             for d in dados:
                 dt_sol = parse_data(d["Data_Solicitacao"])
                 dt_col = parse_data(d["Data_Coleta"])
                 
-                # Regra de Lançadas no Período
                 if dt_sol and filtro_inicio <= dt_sol <= filtro_fim:
                     lancadas_periodo.append(d)
                 
-                # Regra de Coletadas no Período
                 if d["Data_Coleta"] != "" and dt_col and filtro_inicio <= dt_col <= filtro_fim:
                     coletadas_periodo.append(d)
                     
-                # Regra de Pendentes (Não tem baixa, ignora filtro de data final para mostrar o que tá agarrado)
                 if d["Data_Coleta"] == "":
                     pendentes_gerais.append(d)
                     
-                # Acumulador para Ranking de SLA de todas as notas que já foram coletadas
                 if d["Data_Coleta"] != "" and dt_sol and dt_col:
                     dias_demora = (dt_col - dt_sol).days
                     if dias_demora >= 0:
                         tempos_coleta[d["Transportadora"]].append(dias_demora)
             
-            # Ordena a lista de pendentes colocando "URGENTE" no topo
             pendentes_gerais = sorted(pendentes_gerais, key=lambda x: 0 if "URGENTE" in x["Prioridade"] else 1)
 
-            # --- MÉTRICAS ---
             st.markdown("---")
             c1, c2, c3 = st.columns(3)
             c1.metric("📦 Separadas no Período", len(lancadas_periodo))
             c2.metric("✅ Coletadas no Período", len(coletadas_periodo))
             c3.metric("⏳ Pendentes Hoje (Fila)", len(pendentes_gerais))
             
-            # --- RANKING SLA ---
             st.markdown("---")
             st.subheader("🏆 Ranking de Agilidade (Média Histórica)")
             ranking_dados = []
@@ -342,14 +394,12 @@ with aba2:
                 else:
                     ranking_dados.append({"Transportadora": transp, "Dias para Coleta": "Sem dados"})
             
-            # Ordena do mais rápido para o mais lento (ignorando quem não tem dados)
             ranking_dados.sort(key=lambda x: x["Dias para Coleta"] if isinstance(x["Dias para Coleta"], float) else 999)
             cols_rank = st.columns(4)
             for idx, r in enumerate(ranking_dados):
                 with cols_rank[idx]:
                     st.info(f"**{r['Transportadora']}**\n\nTempo Médio: {r['Dias para Coleta']} {'dias' if isinstance(r['Dias para Coleta'], float) else ''}")
 
-            # --- PENDÊNCIAS COM URGÊNCIA ---
             st.markdown("---")
             st.subheader("🚛 Fila de Aguardo (Prioridade Organizada)")
             if pendentes_gerais:
@@ -372,7 +422,6 @@ with aba2:
             else:
                 st.success("🎉 Nenhuma pendência! O estoque está 100% limpo.")
 
-            # --- RELATÓRIO DO PERÍODO ---
             st.markdown("---")
             st.subheader("📋 Resumo do Período (Copiar e Colar)")
             hoje_str = hoje_dt.strftime("%d/%m/%Y")
@@ -405,7 +454,6 @@ with aba2:
             
             st.text_area("Texto Copiável:", value=texto_relatorio, height=300)
             
-            # --- EXPORTAR ---
             st.markdown("---")
             output = io.StringIO()
             writer = csv.DictWriter(output, fieldnames=["Transportadora", "QTD", "Nota", "Data_Solicitacao", "Data_Coleta", "Data_Emissao_Nota", "Usuario_Lancamento", "Prioridade", "Usuario_Baixa"])
@@ -439,8 +487,9 @@ with aba3:
                         cor_status = "#d4edda" if nota["Data_Coleta"] != "" else "#fff3cd"
                         cor_texto = "#155724" if nota["Data_Coleta"] != "" else "#856404"
                         
+                        # Animação adicionada no CARD customizado!
                         st.markdown(f"""
-                        <div style="background-color: {cor_status}; color: {cor_texto}; padding: 15px; border-radius: 10px; margin-top: 10px;">
+                        <div style="background-color: {cor_status}; color: {cor_texto}; padding: 15px; border-radius: 10px; margin-top: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: transform 0.2s ease; animation: fadeSlideUp 0.5s ease;">
                             <h4 style="margin-top:0;">{ '🚨 ' if 'URGENTE' in nota['Prioridade'] else ''}Nota: {nota['Nota']}</h4>
                             <b>Status:</b> {status}<br>
                             <b>Transportadora:</b> {nota['Transportadora']}<br>

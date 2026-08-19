@@ -131,7 +131,7 @@ def obter_dados_gerais():
 # ==========================================
 with st.sidebar:
     st.header("👤 Operador do Sistema")
-    usuario_atual = st.selectbox("Quem está utilizando o aplicativo?", ["Almoxarife", "Pedro (Gestão)", "Outro"])
+    usuario_atual = st.selectbox("Quem está utilizando o aplicativo?", ["Alessandro", "Pedro"])
     
     st.markdown("---")
     st.header("🤖 Alessandro IA")

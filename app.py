@@ -11,14 +11,20 @@ import io
 import pandas as pd
 
 # ==========================================
-# CONFIGURAÇÃO GERAL
+# CONFIGURAÇÃO GERAL E ESTADOS
 # ==========================================
 st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="wide")
 
 TRANSPORTADORAS = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
 
+# Inicializa o histórico do ChatBot na memória do sistema
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = [
+        {"role": "assistant", "content": "Olá! Sou o Alessandro IA. Como posso ajudar com a expedição hoje?"}
+    ]
+
 # ==========================================
-# 🎨 CAMADA DE ESTILIZAÇÃO E ANIMAÇÕES CSS MINIMALISTAS
+# 🎨 CAMADA DE ESTILIZAÇÃO E ANIMAÇÕES CSS
 # ==========================================
 css_minimalista = """
 <style>
@@ -31,7 +37,7 @@ css_minimalista = """
     animation: fadeSlideUp 0.5s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-/* Botões modernos (Efeito Clique e Flutuação Suave) */
+/* Botões modernos */
 div.stButton > button {
     transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
     border-radius: 6px !important;
@@ -45,34 +51,50 @@ div.stButton > button:active {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
 }
 
-/* Hover clean nas métricas do painel */
+/* 💬 BOTÃO FLUTUANTE DO CHATBOT (NOVO) */
+div[data-testid="stPopover"] {
+    position: fixed !important;
+    bottom: 30px !important;
+    right: 30px !important;
+    z-index: 99999 !important;
+}
+div[data-testid="stPopover"] > button {
+    width: 65px !important;
+    height: 65px !important;
+    border-radius: 50% !important;
+    background-color: #2e7bcf !important;
+    color: white !important;
+    font-size: 32px !important;
+    border: none !important;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.3) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+}
+div[data-testid="stPopover"] > button:hover {
+    transform: scale(1.08) !important;
+    box-shadow: 0 8px 24px rgba(46, 123, 207, 0.5) !important;
+}
+
+/* Janela do ChatBot */
+div[data-testid="stPopoverBody"] {
+    width: 380px !important;
+    border-radius: 16px !important;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important;
+    padding: 15px !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+}
+
+/* Hover clean nas métricas */
 div[data-testid="stMetric"] {
     transition: all 0.2s ease !important;
     padding: 12px !important;
     border-radius: 8px !important;
-    background: transparent !important;
 }
 div[data-testid="stMetric"]:hover {
-    background-color: #f8f9fa !important;
+    background-color: rgba(128,128,128,0.05) !important;
     transform: translateY(-2px) !important;
-}
-
-/* Transição de foco limpa nos campos de digitação/data */
-div[data-baseweb="input"] > div, div[data-baseweb="select"] > div, div[data-baseweb="datepicker"] > div {
-    border-radius: 6px !important;
-    transition: box-shadow 0.2s ease, border-color 0.2s ease !important;
-}
-
-/* Alertas com aparição sutil */
-@keyframes popIn {
-    0% { opacity: 0; transform: scale(0.98); }
-    100% { opacity: 1; transform: scale(1); }
-}
-div[data-testid="stAlert"] {
-    animation: popIn 0.3s ease-out;
-    border-radius: 8px !important;
-    border: none !important;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.03) !important;
 }
 </style>
 """
@@ -97,7 +119,6 @@ def disparar_email_silencioso(transportadora, nota, qtd, lembrete=False, priorid
         if destinatario and "teste.com" not in destinatario.lower():
             msg = EmailMessage()
             
-            # Montagem dinâmica do texto para evitar linhas duplicadas no código
             urgencia_tag = "[URGENTE] " if "URGENTE" in prioridade else ""
             tipo_aviso = "LEMBRETE URGENTE: Coleta Pendente" if lembrete else "Nova Coleta Liberada"
             
@@ -174,44 +195,11 @@ def obter_dados_gerais():
     return dados
 
 # ==========================================
-# SIDEBAR - IDENTIFICAÇÃO E IA
+# SIDEBAR - AGORA APENAS USUÁRIO
 # ==========================================
 with st.sidebar:
-    st.header("👤 Operador do Sistema")
-    usuario_atual = st.selectbox("Quem está utilizando o aplicativo?", ["Pedro", "Alessandro", "Outro"])
-    
-    st.markdown("---")
-    st.header("🤖 Alessandro IA")
-    st.markdown("Eu sou o assistente IA da filial Campos Dos Goytacazes.")
-    
-    # CORRIGIDO AQUI: text_area não aceita autocomplete="off"
-    pergunta_usuario = st.text_area("O que você precisa hoje?")
-    
-    if st.button("Perguntar", use_container_width=True):
-        if pergunta_usuario:
-            with st.spinner("Analisando dados..."):
-                try:
-                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                    modelo = genai.GenerativeModel('gemini-3.6-flash')
-                    dados_estoque = obter_dados_gerais()
-                    hoje = datetime.now().strftime("%d/%m/%Y")
-                    dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Solicitacao"] == hoje]
-                    
-                    prompt = f"""
-                    O seu nome é Alessandro IA. Você é um assistente logístico que ajuda o administrador de um galpão.
-                    Hoje é dia {hoje}. Seja direto e polido.
-                    Aqui estão os dados resumidos das notas pendentes na filial e das operações de hoje:
-                    {json.dumps(dados_filtrados, ensure_ascii=False)}
-                    Use EXCLUSIVAMENTE esses dados para responder. 
-                    Pergunta: "{pergunta_usuario}"
-                    """
-                    resposta = modelo.generate_content(prompt)
-                    st.success("✅ Resposta:")
-                    st.markdown(f"> {resposta.text}")
-                except Exception as e:
-                    st.error(f"❌ Erro na IA: {e}")
-        else:
-            st.warning("⚠️ Digite uma pergunta primeiro.")
+    st.header("👤 Operador")
+    usuario_atual = st.selectbox("Identificação:", ["Pedro", "Alessandro", "Outro"])
 
 # ==========================================
 # CORPO PRINCIPAL
@@ -241,7 +229,6 @@ with aba1:
             qtd = st.number_input("QTD (Volumes)", min_value=1, step=1)
             data_solicitacao = st.date_input("Data da Solicitação", format="DD/MM/YYYY")
         with col2:
-            # AQUI CONTINUA POIS É TEXT_INPUT (o que evita o cartão de crédito aparecer)
             nota_nova = st.text_input("Nota (Nº)", autocomplete="off")
             data_emissao = st.date_input("Data de Emissão da Nota", format="DD/MM/YYYY")
             
@@ -328,7 +315,6 @@ with aba2:
     
     with st.expander("📅 Filtrar Dados por Período", expanded=True):
         c_ini, c_fim = st.columns(2)
-        # CAMPOS VAZIOS POR PADRÃO (Força o preenchimento manual)
         filtro_inicio = c_ini.date_input("Data Inicial", value=None, format="DD/MM/YYYY")
         filtro_fim = c_fim.date_input("Data Final", value=None, format="DD/MM/YYYY")
     
@@ -460,7 +446,6 @@ with aba2:
 # ==========================================
 with aba3:
     st.markdown("### 🔍 Pesquisa & Rastreabilidade")
-    # AQUI CONTINUA POIS É TEXT_INPUT
     nota_busca = st.text_input("Digite o Número da Nota:", autocomplete="off")
     
     if st.button("Procurar Nota", use_container_width=True):
@@ -495,7 +480,6 @@ with aba3:
 # ==========================================
 with aba4:
     st.markdown("### ⚙️ Corrigir, Excluir ou Re-cobrar")
-    # AQUI CONTINUA POIS É TEXT_INPUT
     nota_alvo = st.text_input("Digite a Nota Fiscal para gerenciar:", autocomplete="off")
     
     if st.button("Buscar Registro", use_container_width=True):
@@ -536,3 +520,51 @@ with aba4:
                         st.experimental_rerun()
                 except Exception as e:
                     st.error(f"Erro ao excluir: {e}")
+
+# ==========================================
+# 💬 ALESSANDRO IA - CHAT FLUTUANTE
+# ==========================================
+with st.popover("🤖", help="Conversar com Alessandro IA"):
+    st.markdown("### 🤖 Alessandro IA")
+    
+    # Caixa do chat rolável
+    box_mensagens = st.container(height=350)
+    with box_mensagens:
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+    
+    # Input do Chat
+    with st.form("chat_form", clear_on_submit=True):
+        col_in, col_btn = st.columns([4, 1])
+        with col_in:
+            nova_msg = st.text_input("Mensagem", label_visibility="collapsed", placeholder="O que você precisa?", autocomplete="off")
+        with col_btn:
+            submit_chat = st.form_submit_button("➤")
+            
+        if submit_chat and nova_msg:
+            # Salva na memória
+            st.session_state.chat_history.append({"role": "user", "content": nova_msg})
+            
+            with st.spinner("Analisando..."):
+                try:
+                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                    modelo = genai.GenerativeModel('gemini-3.6-flash')
+                    dados_estoque = obter_dados_gerais()
+                    hoje = datetime.now().strftime("%d/%m/%Y")
+                    dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Solicitacao"] == hoje]
+                    
+                    historico = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-5:]])
+                    
+                    prompt = f"""
+                    O seu nome é Alessandro IA. Você é um assistente logístico rápido e prestativo.
+                    Hoje é dia {hoje}. 
+                    DADOS: {json.dumps(dados_filtrados, ensure_ascii=False)}
+                    HISTÓRICO RECENTE: {historico}
+                    Responda à pergunta: "{nova_msg}"
+                    """
+                    resposta = modelo.generate_content(prompt)
+                    st.session_state.chat_history.append({"role": "assistant", "content": resposta.text})
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro: {e}")

@@ -5,10 +5,67 @@ import json
 import urllib.parse
 from datetime import datetime
 import google.generativeai as genai
+import smtplib
+from email.message import EmailMessage
 
 # Configuração da Página
 st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="centered")
 
+# ==========================================
+# FUNÇÃO DO ROBÔ DE E-MAILS
+# ==========================================
+def disparar_email_silencioso(transportadora, nota, qtd):
+    try:
+        # Puxa o remetente e a senha dos Secrets do Streamlit
+        remetente = st.secrets["EMAIL_REMETENTE"]
+        senha = st.secrets["SENHA_EMAIL"]
+        
+        # LISTA DE E-MAILS DAS TRANSPORTADORAS
+        emails_destino = {
+            "JARBAS": "email_do_jarbas@teste.com",
+            "TRANSCHERRER": "filial.campos@transcherrer.com.br",
+            "FL": "email_da_fl@teste.com",
+            "GENEROSO": "email_do_generoso@teste.com"
+        }
+        
+        destinatario = emails_destino.get(transportadora)
+        
+        if destinatario and destinatario != "email_do_jarbas@teste.com" and destinatario != "email_da_fl@teste.com" and destinatario != "email_do_generoso@teste.com":
+            # Monta o visual da mensagem
+            msg = EmailMessage()
+            msg['Subject'] = f"Nova Coleta Liberada - Speedmax (Nota: {nota})"
+            msg['From'] = remetente
+            msg['To'] = destinatario
+            
+            corpo_email = f"""
+Olá, equipe da {transportadora}!
+
+Temos uma nova mercadoria separada e liberada para coleta na filial Speedmax.
+
+📋 DETALHES DA COLETA:
+- Nota Fiscal: {nota}
+- Quantidade de Volumes: {qtd}
+
+Por favor, programem a retirada assim que possível.
+
+Atenciosamente,
+Logística Speedmax.
+            """
+            msg.set_content(corpo_email)
+            
+            # Faz o envio invisível usando o servidor do Google
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+                smtp.login(remetente, senha)
+                smtp.send_message(msg)
+                
+            return True
+        return False
+    except Exception as e:
+        return str(e)
+
+# ==========================================
+# FUNÇÕES DE BANCO DE DADOS
+# ==========================================
 def conectar_planilha():
     escopo = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     cred_dict = json.loads(st.secrets["google_credentials"])
@@ -43,7 +100,7 @@ def obter_dados_gerais():
 # ==========================================
 with st.sidebar:
     st.header("🤖 Alessandro IA")
-    st.markdown("Pergunte sobre as mercadorias ou peça para eu redigir e-mails para as transportadoras.")
+    st.markdown("Pergunte sobre as mercadorias ou peça para eu redigir avisos especiais.")
     
     pergunta_usuario = st.text_area("O que você precisa?", placeholder="Ex: Quantas notas o Jarbas tem pendente?")
     
@@ -52,17 +109,13 @@ with st.sidebar:
             with st.spinner("O Alessandro está analisando o estoque..."):
                 try:
                     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                    
-                    # Conectando EXATAMENTE na versão que o Google exigiu no erro (3.6-flash)
                     modelo = genai.GenerativeModel('gemini-3.6-flash')
                     
                     dados_estoque = obter_dados_gerais()
                     hoje = datetime.now().strftime("%d/%m/%Y")
                     
-                    # FILTRO DE SEGURANÇA: Lê apenas dados que importam hoje para não estourar limite
                     dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Emissao"] == hoje]
                     
-                    # CÉREBRO DA IA: Aqui nós batizamos ele oficialmente
                     prompt = f"""
                     O seu nome é Alessandro IA.
                     Você é um assistente logístico altamente eficiente que ajuda o administrador de um galpão.
@@ -120,26 +173,22 @@ with aba1:
                 st.warning("⚠️ Preencha o número da Nota.")
             else:
                 try:
+                    # 1. Salva na Planilha
                     planilha = conectar_planilha()
                     aba_sel = planilha.worksheet(transp_nova)
                     data_formatada = data_emissao.strftime("%d/%m/%Y")
                     
                     aba_sel.append_row([qtd, nota_nova, data_formatada, ""])
-                    st.success(f"✅ Nota {nota_nova} registrada na aba {transp_nova}!")
+                    st.success(f"✅ Nota {nota_nova} registrada com sucesso na aba {transp_nova}!")
                     
-                    if transp_nova == "FL":
-                        st.info("💻 Transportadora FL selecionada. Envie o aviso manualmente pelo **Microsoft Teams**!")
+                    # 2. Dispara o E-mail Silencioso
+                    resultado_email = disparar_email_silencioso(transp_nova, nota_nova, qtd)
+                    if resultado_email is True:
+                        st.info(f"📧 E-mail enviado automaticamente para {transp_nova}!")
+                    elif resultado_email is False:
+                        st.warning(f"⚠️ Nota registrada, mas o e-mail não foi enviado porque o endereço oficial da {transp_nova} ainda não foi configurado.")
                     else:
-                        telefones = {
-                            "JARBAS": "5522999445773",
-                            "TRANSCHERRER": "5527992527567",
-                            "GENEROSO": "5522992092727"
-                        }
-                        numero_destino = telefones.get(transp_nova, "")
-                        texto_msg = f"Olá, equipe {transp_nova}! Temos uma mercadoria separada para coleta na Speedmax. 📦\n\n*Nota:* {nota_nova}\n*Volumes:* {qtd}\n\nFicamos no aguardo!"
-                        texto_codificado = urllib.parse.quote(texto_msg)
-                        link_wpp = f"https://wa.me/{numero_destino}?text={texto_codificado}"
-                        st.link_button(f"📱 Enviar aviso no WhatsApp ({transp_nova})", link_wpp, use_container_width=True)
+                        st.error(f"❌ Erro ao enviar o e-mail: {resultado_email}")
                         
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")

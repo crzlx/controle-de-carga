@@ -17,10 +17,10 @@ st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="wide
 
 TRANSPORTADORAS = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
 
-# Inicializa o histórico do ChatBot na memória do sistema
+# Inicializa o histórico do ChatBot com a nova postura versátil
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
-        {"role": "assistant", "content": "Olá! Sou o Alessandro IA. Como posso ajudar com a expedição hoje?"}
+        {"role": "assistant", "content": "Olá! Sou o Alessandro IA. Estou aqui para ajudar com o status da expedição, resolver problemas logísticos do dia a dia e até dar suporte com vendas e clientes. Como posso ser útil hoje?"}
     ]
 
 # ==========================================
@@ -160,33 +160,27 @@ def obter_dados_gerais():
     return dados
 
 # ==========================================
-# 🤖 CHATBOT FLUTUANTE (MODAL CENTRAL) - CORRIGIDO
+# 🤖 CHATBOT FLUTUANTE (MODAL CENTRAL) - VERSÃO LIVRE
 # ==========================================
 @st.dialog("🤖 Chat com Alessandro IA")
 def abrir_chat_ia():
-    # 1. Cria a caixa do chat com altura FIXA e barra de rolagem
     box_chat = st.container(height=400)
     
-    # 2. Desenha o histórico DENTRO da caixa de rolagem
     with box_chat:
         for msg in st.session_state.chat_history:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
                 
-    # 3. Input Fixo no rodapé da janela
-    if nova_msg := st.chat_input("O que você precisa saber sobre a expedição?"):
+    if nova_msg := st.chat_input("Pergunte sobre logística, vendas, problemas do galpão..."):
         
-        # Salva na memória
         st.session_state.chat_history.append({"role": "user", "content": nova_msg})
         
-        # Desenha a nova mensagem do usuário instantaneamente DENTRO da caixa de rolagem
         with box_chat:
             with st.chat_message("user"):
                 st.markdown(nova_msg)
                 
-            # Mostra o robô "pensando" e a resposta DENTRO da caixa de rolagem
             with st.chat_message("assistant"):
-                with st.spinner("Analisando as planilhas do galpão..."):
+                with st.spinner("Analisando e processando..."):
                     try:
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                         modelo = genai.GenerativeModel('gemini-3.6-flash')
@@ -194,20 +188,28 @@ def abrir_chat_ia():
                         hoje = datetime.now().strftime("%d/%m/%Y")
                         dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Solicitacao"] == hoje]
                         
-                        historico = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-4:]])
+                        historico = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-6:]])
                         
+                        # NOVO CÉREBRO DO ALESSANDRO (Mais liberdade e versatilidade)
                         prompt = f"""
-                        O seu nome é Alessandro IA. Você é um assistente logístico super inteligente que ajuda na expedição. 
-                        Hoje é {hoje}. 
-                        DADOS ATUAIS DA FILIAL: {json.dumps(dados_filtrados, ensure_ascii=False)}
-                        HISTÓRICO RECENTE DO CHAT: {historico}
+                        Você é o Alessandro IA, um assistente virtual avançado e extremamente versátil da filial Speedmax em Campos dos Goytacazes.
+                        Seu papel vai muito além de apenas ler planilhas: você é um conselheiro estratégico para o dia a dia da operação. Você ajuda na logística, expedição, mas também tem total liberdade para dar dicas de vendas, atendimento ao cliente, redação de e-mails, gestão de tempo e resolução de problemas operacionais gerais.
+
+                        Hoje é dia {hoje}.
                         
-                        Responda de forma direta e profissional à pergunta: "{nova_msg}"
+                        REGRA 1: Se a pergunta do usuário for especificamente sobre o status atual de notas ou do galpão, use SOMENTE estes dados para responder de forma precisa:
+                        DADOS ATUAIS DA FILIAL: {json.dumps(dados_filtrados, ensure_ascii=False)}
+
+                        REGRA 2: Se a pergunta for sobre outros assuntos (como lidar com transportadoras atrasadas, dicas de vendas de pneus/peças, como organizar melhor o estoque, redação de mensagens para clientes, etc.), sinta-se totalmente livre para usar sua inteligência avançada para dar as melhores sugestões possíveis.
+
+                        HISTÓRICO RECENTE DA CONVERSA:
+                        {historico}
+                        
+                        Responda de forma prestativa, inteligente, direta e altamente profissional à seguinte mensagem: "{nova_msg}"
                         """
                         resposta = modelo.generate_content(prompt)
                         
                         st.markdown(resposta.text)
-                        # Salva a resposta na memória
                         st.session_state.chat_history.append({"role": "assistant", "content": resposta.text})
                         
                     except Exception as e:
@@ -224,7 +226,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Botão que aciona a Janela Flutuante (Modal) no meio da tela
     if st.button("💬 Falar com Alessandro IA", use_container_width=True):
         abrir_chat_ia()
 

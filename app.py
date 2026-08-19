@@ -129,7 +129,7 @@ with st.sidebar:
                     """
                     
                     resposta = modelo.generate_content(prompt)
-                    st.success("✅ Resposta do Alessandro:")
+                    st.success("Aqui está sua resposta:")
                     st.markdown(f"> {resposta.text}")
                     
                 except Exception as e:
@@ -140,7 +140,7 @@ with st.sidebar:
 # ==========================================
 # CORPO PRINCIPAL DO APLICATIVO
 # ==========================================
-st.title("🚚 Gestão de Coletas")
+st.title("🚚 Expedição Campos Dos Goytacazes")
 
 transportadoras = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
 

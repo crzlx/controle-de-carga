@@ -49,33 +49,53 @@ with st.sidebar:
     
     if st.button("Perguntar à IA", use_container_width=True):
         if pergunta_usuario:
-            with st.spinner("Analisando o estoque..."):
+            with st.spinner("Conectando ao cérebro da IA..."):
                 try:
+                    # 1. Configura a chave
                     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                    # CORREÇÃO APLICADA AQUI: usando o modelo mais estável
-                    modelo = genai.GenerativeModel('gemini-pro')
                     
-                    dados_estoque = obter_dados_gerais()
-                    hoje = datetime.now().strftime("%d/%m/%Y")
+                    # 2. CÓDIGO INTELIGENTE: Pede para o Google a lista de modelos permitidos para esta chave
+                    modelos_disponiveis = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
                     
-                    prompt = f"""
-                    Você é um assistente logístico altamente eficiente que ajuda o administrador de um galpão.
-                    Hoje é dia {hoje}. Seja direto, polido e profissional.
-                    Aqui estão os dados em tempo real das planilhas de coleta:
-                    {json.dumps(dados_estoque, ensure_ascii=False)}
-                    
-                    Use EXCLUSIVAMENTE esses dados para responder. Se a resposta não estiver nos dados, avise.
-                    
-                    Responda ao pedido do usuário de forma clara:
-                    "{pergunta_usuario}"
-                    """
-                    
-                    resposta = modelo.generate_content(prompt)
-                    st.success("Resposta:")
-                    st.markdown(f"> {resposta.text}")
+                    if not modelos_disponiveis:
+                        st.error("❌ A sua Chave API foi aceita, mas ela não tem permissão para gerar textos. Verifique o Google AI Studio.")
+                    else:
+                        # 3. O aplicativo escolhe o melhor modelo disponível na sua lista
+                        modelo_ideal = None
+                        for m in modelos_disponiveis:
+                            if 'gemini-1.5-flash' in m:
+                                modelo_ideal = m
+                                break
+                            elif 'gemini-pro' in m and not modelo_ideal:
+                                modelo_ideal = m
+                                
+                        if not modelo_ideal:
+                            modelo_ideal = modelos_disponiveis[0] # Se não achar os nomes padrão, pega o primeiro que funcionar
+                        
+                        # Inicia a IA com o modelo exato que o Google autorizou
+                        modelo = genai.GenerativeModel(modelo_ideal)
+                        
+                        dados_estoque = obter_dados_gerais()
+                        hoje = datetime.now().strftime("%d/%m/%Y")
+                        
+                        prompt = f"""
+                        Você é um assistente logístico altamente eficiente que ajuda o administrador de um galpão.
+                        Hoje é dia {hoje}. Seja direto, polido e profissional.
+                        Aqui estão os dados em tempo real das planilhas de coleta:
+                        {json.dumps(dados_estoque, ensure_ascii=False)}
+                        
+                        Use EXCLUSIVAMENTE esses dados para responder. Se a resposta não estiver nos dados, avise.
+                        
+                        Responda ao pedido do usuário de forma clara:
+                        "{pergunta_usuario}"
+                        """
+                        
+                        resposta = modelo.generate_content(prompt)
+                        st.success("✅ Resposta pronta!")
+                        st.markdown(f"> {resposta.text}")
                     
                 except Exception as e:
-                    st.error(f"Erro na IA. Verifique a API Key. Detalhe: {e}")
+                    st.error(f"❌ Erro na IA. Verifique se a sua Chave API está correta (ela deve começar com 'AIza'). Detalhe do erro: {e}")
         else:
             st.warning("⚠️ Digite uma pergunta primeiro.")
 
@@ -86,7 +106,6 @@ st.title("🚚 Gestão de Coletas")
 
 transportadoras = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
 
-# O sistema tem as 3 Abas perfeitamente focadas na operação
 aba1, aba2, aba3 = st.tabs([
     "📦 Movimentação", "📊 Painel da Filial", "🔍 Consulta Rápida"
 ])

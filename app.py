@@ -38,16 +38,17 @@ def disparar_email_silencioso(transportadora, nota, qtd):
             msg['From'] = remetente
             msg['To'] = destinatario # A vírgula aqui dentro faz o envio múltiplo automaticamente
             
+            # TEXTO DO E-MAIL ATUALIZADO
             corpo_email = f"""
 Olá, equipe da {transportadora}!
 
 Temos uma nova mercadoria separada e liberada para coleta na filial Speedmax.
 
-📋 DETALHES DA COLETA:
+DETALHES DA COLETA:
 - Nota Fiscal: {nota}
 - Quantidade de Volumes: {qtd}
 
-Por favor, programem a retirada assim que possível.
+Por favor, programem a coleta assim que possível.
 
 Atenciosamente,
 Logística Speedmax.

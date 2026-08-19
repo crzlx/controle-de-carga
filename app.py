@@ -53,44 +53,30 @@ with st.sidebar:
                 try:
                     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                     
-                    modelos_disponiveis = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                    # Conectando EXATAMENTE na versão que o Google exigiu no erro (3.6-flash)
+                    modelo = genai.GenerativeModel('gemini-3.6-flash')
                     
-                    if not modelos_disponiveis:
-                        st.error("❌ A sua Chave API não tem permissão para gerar textos.")
-                    else:
-                        # CÓDIGO NOVO: Força a busca por um modelo da linha "Flash" (Gratuito)
-                        modelo_ideal = None
-                        for m in modelos_disponiveis:
-                            if 'flash' in m.lower():
-                                modelo_ideal = m
-                                break
-                                
-                        if not modelo_ideal:
-                            modelo_ideal = "gemini-2.5-flash" # Trava de segurança
-                        
-                        modelo = genai.GenerativeModel(modelo_ideal)
-                        
-                        dados_estoque = obter_dados_gerais()
-                        hoje = datetime.now().strftime("%d/%m/%Y")
-                        
-                        # FILTRO DE SEGURANÇA: Lê apenas dados que importam hoje
-                        dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Emissao"] == hoje]
-                        
-                        prompt = f"""
-                        Você é um assistente logístico altamente eficiente que ajuda o administrador de um galpão.
-                        Hoje é dia {hoje}. Seja direto, polido e profissional.
-                        Aqui estão os dados resumidos das notas pendentes na filial e das operações de hoje:
-                        {json.dumps(dados_filtrados, ensure_ascii=False)}
-                        
-                        Use EXCLUSIVAMENTE esses dados para responder. Se a resposta exigir uma nota antiga que não está aqui, avise que você só tem acesso às notas pendentes e do dia de hoje para economizar processamento.
-                        
-                        Responda ao pedido do usuário de forma clara:
-                        "{pergunta_usuario}"
-                        """
-                        
-                        resposta = modelo.generate_content(prompt)
-                        st.success("✅ Resposta pronta!")
-                        st.markdown(f"> {resposta.text}")
+                    dados_estoque = obter_dados_gerais()
+                    hoje = datetime.now().strftime("%d/%m/%Y")
+                    
+                    # FILTRO DE SEGURANÇA: Lê apenas dados que importam hoje para não estourar limite
+                    dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Emissao"] == hoje]
+                    
+                    prompt = f"""
+                    Você é um assistente logístico altamente eficiente que ajuda o administrador de um galpão.
+                    Hoje é dia {hoje}. Seja direto, polido e profissional.
+                    Aqui estão os dados resumidos das notas pendentes na filial e das operações de hoje:
+                    {json.dumps(dados_filtrados, ensure_ascii=False)}
+                    
+                    Use EXCLUSIVAMENTE esses dados para responder. Se a resposta exigir uma nota antiga que não está aqui, avise que você só tem acesso às notas pendentes e do dia de hoje para economizar processamento.
+                    
+                    Responda ao pedido do usuário de forma clara:
+                    "{pergunta_usuario}"
+                    """
+                    
+                    resposta = modelo.generate_content(prompt)
+                    st.success("✅ Resposta pronta!")
+                    st.markdown(f"> {resposta.text}")
                     
                 except Exception as e:
                     st.error(f"❌ Erro na IA. Detalhe: {e}")
@@ -282,4 +268,3 @@ with aba3:
                         """, unsafe_allow_html=True)
                 else:
                     st.error("❌ Esta nota não foi encontrada em nenhuma das planilhas.")
-                        

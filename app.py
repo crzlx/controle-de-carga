@@ -58,23 +58,22 @@ with st.sidebar:
                     if not modelos_disponiveis:
                         st.error("❌ A sua Chave API não tem permissão para gerar textos.")
                     else:
+                        # CÓDIGO NOVO: Força a busca por um modelo da linha "Flash" (Gratuito)
                         modelo_ideal = None
                         for m in modelos_disponiveis:
-                            if 'gemini-1.5-flash' in m:
+                            if 'flash' in m.lower():
                                 modelo_ideal = m
                                 break
-                            elif 'gemini-pro' in m and not modelo_ideal:
-                                modelo_ideal = m
                                 
                         if not modelo_ideal:
-                            modelo_ideal = modelos_disponiveis[0]
+                            modelo_ideal = "gemini-2.5-flash" # Trava de segurança
                         
                         modelo = genai.GenerativeModel(modelo_ideal)
                         
                         dados_estoque = obter_dados_gerais()
                         hoje = datetime.now().strftime("%d/%m/%Y")
                         
-                        # FILTRO DE SEGURANÇA: A IA só lê as notas pendentes ou mexidas hoje para não estourar o limite.
+                        # FILTRO DE SEGURANÇA: Lê apenas dados que importam hoje
                         dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Emissao"] == hoje]
                         
                         prompt = f"""
@@ -94,7 +93,7 @@ with st.sidebar:
                         st.markdown(f"> {resposta.text}")
                     
                 except Exception as e:
-                    st.error(f"❌ Limite da API atingido ou Erro. Tente perguntar novamente em 1 minuto! Detalhe: {e}")
+                    st.error(f"❌ Erro na IA. Detalhe: {e}")
         else:
             st.warning("⚠️ Digite uma pergunta primeiro.")
 
@@ -283,3 +282,4 @@ with aba3:
                         """, unsafe_allow_html=True)
                 else:
                     st.error("❌ Esta nota não foi encontrada em nenhuma das planilhas.")
+                        

@@ -20,22 +20,23 @@ def disparar_email_silencioso(transportadora, nota, qtd):
         remetente = st.secrets["EMAIL_REMETENTE"]
         senha = st.secrets["SENHA_EMAIL"]
         
-        # LISTA DE E-MAILS DAS TRANSPORTADORAS
+        # LISTA DE E-MAILS DAS TRANSPORTADORAS (Separe por vírgula para mandar para vários!)
         emails_destino = {
-            "JARBAS": "email_do_jarbas@teste.com",
-            "TRANSCHERRER": "filial.campos@transcherrer.com.br",
+            "JARBAS": "email_do_jarbas@teste.com, email2_do_jarbas@teste.com",
+            "TRANSCHERRER": "filial.campos@transcherrer.com.br, cidy.neves@transcherrer.com.br, filial.campos02@transcherrer.com.br",
             "FL": "email_da_fl@teste.com",
             "GENEROSO": "email_do_generoso@teste.com"
         }
         
         destinatario = emails_destino.get(transportadora)
         
-        if destinatario and destinatario != "email_do_jarbas@teste.com" and destinatario != "email_da_fl@teste.com" and destinatario != "email_do_generoso@teste.com":
+        # O código só dispara se não for o texto de "teste" padrão
+        if destinatario and "teste.com" not in destinatario.lower() or transportadora == "TRANSCHERRER":
             # Monta o visual da mensagem
             msg = EmailMessage()
             msg['Subject'] = f"Nova Coleta Liberada - Speedmax (Nota: {nota})"
             msg['From'] = remetente
-            msg['To'] = destinatario
+            msg['To'] = destinatario # A vírgula aqui dentro faz o envio múltiplo automaticamente
             
             corpo_email = f"""
 Olá, equipe da {transportadora}!
@@ -184,7 +185,7 @@ with aba1:
                     # 2. Dispara o E-mail Silencioso
                     resultado_email = disparar_email_silencioso(transp_nova, nota_nova, qtd)
                     if resultado_email is True:
-                        st.info(f"📧 E-mail enviado automaticamente para {transp_nova}!")
+                        st.info(f"📧 E-mail enviado automaticamente para a equipe da {transp_nova}!")
                     elif resultado_email is False:
                         st.warning(f"⚠️ Nota registrada, mas o e-mail não foi enviado porque o endereço oficial da {transp_nova} ainda não foi configurado.")
                     else:

@@ -104,7 +104,7 @@ with st.sidebar:
     
     if st.button("Perguntar ao Alessandro", use_container_width=True):
         if pergunta_usuario:
-            with st.spinner("O Alessandro está analisando o estoque..."):
+            with st.spinner("O Alessandro está pensando..."):
                 try:
                     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                     modelo = genai.GenerativeModel('gemini-3.6-flash')

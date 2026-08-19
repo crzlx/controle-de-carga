@@ -160,7 +160,7 @@ def obter_dados_gerais():
     return dados
 
 # ==========================================
-# 🤖 CHATBOT FLUTUANTE (MODAL CENTRAL) 
+# 🤖 CHATBOT FLUTUANTE (MODAL CENTRAL) - VERSÃO LIVRE E ESTÁVEL
 # ==========================================
 @st.dialog("🤖 Chat com Alessandro IA")
 def abrir_chat_ia():
@@ -183,8 +183,9 @@ def abrir_chat_ia():
                 with st.spinner("Analisando e processando..."):
                     try:
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                        # Motor de IA alterado para o modelo flash moderno (evita erros e é mais rápido)
-                        modelo = genai.GenerativeModel('gemini-1.5-flash')
+                        
+                        # MOTOR ALTERADO: Usando o gemini-pro universal para evitar Erro 404
+                        modelo = genai.GenerativeModel('gemini-pro')
                         
                         dados_estoque = obter_dados_gerais()
                         hoje = datetime.now().strftime("%d/%m/%Y")
@@ -215,11 +216,10 @@ def abrir_chat_ia():
                         
                     except Exception as e:
                         erro_str = str(e)
-                        # CAPTURA AMIGÁVEL DO ERRO 429 (Limite Excedido)
-                        if "429" in erro_str or "Quota" in erro_str:
+                        if "429" in erro_str or "Quota" in erro_str or "exhausted" in erro_str.lower():
                             erro_msg = "⏳ **Ops! Muitos acessos ao mesmo tempo.**\n\nO limite do plano gratuito foi atingido por um instante. Por favor, **aguarde 1 minuto** e me faça a pergunta novamente!"
                         else:
-                            erro_msg = f"❌ Ocorreu um erro ao consultar: {e}"
+                            erro_msg = f"❌ Ocorreu um erro técnico: {e}"
                             
                         st.error(erro_msg)
                         st.session_state.chat_history.append({"role": "assistant", "content": erro_msg})

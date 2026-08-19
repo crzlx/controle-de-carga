@@ -97,6 +97,7 @@ def disparar_email_silencioso(transportadora, nota, qtd, lembrete=False, priorid
         if destinatario and "teste.com" not in destinatario.lower():
             msg = EmailMessage()
             
+            # Montagem dinâmica do texto para evitar linhas duplicadas no código
             urgencia_tag = "[URGENTE] " if "URGENTE" in prioridade else ""
             tipo_aviso = "LEMBRETE URGENTE: Coleta Pendente" if lembrete else "Nova Coleta Liberada"
             
@@ -183,7 +184,8 @@ with st.sidebar:
     st.header("🤖 Alessandro IA")
     st.markdown("Assistente Logístico Integrado.")
     
-    pergunta_usuario = st.text_area("O que você precisa hoje?", autocomplete="off")
+    # CORRIGIDO AQUI: text_area não aceita autocomplete="off"
+    pergunta_usuario = st.text_area("O que você precisa hoje?")
     
     if st.button("Perguntar", use_container_width=True):
         if pergunta_usuario:
@@ -239,7 +241,7 @@ with aba1:
             qtd = st.number_input("QTD (Volumes)", min_value=1, step=1)
             data_solicitacao = st.date_input("Data da Solicitação", format="DD/MM/YYYY")
         with col2:
-            # AUTOCOMPLETE OFF ADICIONADO AQUI
+            # AQUI CONTINUA POIS É TEXT_INPUT (o que evita o cartão de crédito aparecer)
             nota_nova = st.text_input("Nota (Nº)", autocomplete="off")
             data_emissao = st.date_input("Data de Emissão da Nota", format="DD/MM/YYYY")
             
@@ -326,6 +328,7 @@ with aba2:
     
     with st.expander("📅 Filtrar Dados por Período", expanded=True):
         c_ini, c_fim = st.columns(2)
+        # CAMPOS VAZIOS POR PADRÃO (Força o preenchimento manual)
         filtro_inicio = c_ini.date_input("Data Inicial", value=None, format="DD/MM/YYYY")
         filtro_fim = c_fim.date_input("Data Final", value=None, format="DD/MM/YYYY")
     
@@ -457,7 +460,7 @@ with aba2:
 # ==========================================
 with aba3:
     st.markdown("### 🔍 Pesquisa & Rastreabilidade")
-    # AUTOCOMPLETE OFF ADICIONADO AQUI
+    # AQUI CONTINUA POIS É TEXT_INPUT
     nota_busca = st.text_input("Digite o Número da Nota:", autocomplete="off")
     
     if st.button("Procurar Nota", use_container_width=True):
@@ -492,7 +495,7 @@ with aba3:
 # ==========================================
 with aba4:
     st.markdown("### ⚙️ Corrigir, Excluir ou Re-cobrar")
-    # AUTOCOMPLETE OFF ADICIONADO AQUI
+    # AQUI CONTINUA POIS É TEXT_INPUT
     nota_alvo = st.text_input("Digite a Nota Fiscal para gerenciar:", autocomplete="off")
     
     if st.button("Buscar Registro", use_container_width=True):

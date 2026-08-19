@@ -2,6 +2,7 @@ import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
+import urllib.parse
 
 st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="centered")
 
@@ -11,12 +12,10 @@ def conectar_planilha():
     credenciais = ServiceAccountCredentials.from_json_keyfile_dict(cred_dict, escopo)
     cliente = gspread.authorize(credenciais)
     
-    
-    return cliente.open("Coletas")
+    return cliente.open_by_url("https://docs.google.com/spreadsheets/d/1yHThW-nbcwxCcNTnb66PP1YHbHpCE9_ep3DC33-OZs4/edit?usp=sharing")
 
 st.title("🚚 Gestão de Coletas")
 
-# Cria duas abas na tela para separar os momentos da operação
 aba1, aba2 = st.tabs(["📝 Lançar Nova Nota", "✅ Confirmar Coleta"])
 
 transportadoras = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
@@ -45,14 +44,32 @@ with aba1:
                     aba_sel = planilha.worksheet(transp_nova)
                     data_formatada = data_emissao.strftime("%d/%m/%Y")
                     
-                    # Envia a linha com a 4ª coluna (DT. COLETA) vazia ("")
                     nova_linha = [qtd, nota_nova, data_formatada, ""]
                     aba_sel.append_row(nova_linha)
-                    st.success(f"✅ Nota {nota_nova} registrada e aguardando coleta!")
+                    st.success(f"✅ Nota {nota_nova} registrada na aba {transp_nova}!")
+                    
+                    # --- LÓGICA DO AVISO (WHATSAPP E TEAMS) ---
+                    if transp_nova == "FL":
+                        st.info("💻 A transportadora FL foi selecionada. Lembre-se de enviar o aviso manualmente pelo **Microsoft Teams**!")
+                    else:
+                        # Telefones oficiais atualizados
+                        telefones = {
+                            "JARBAS": "5522999445773",
+                            "TRANSCHERRER": "5527992527567",
+                            "GENEROSO": "5522992092727"
+                        }
+                        
+                        numero_destino = telefones.get(transp_nova, "")
+                        texto_msg = f"Olá, equipe {transp_nova}! Temos uma mercadoria separada para coleta na Speedmax. 📦\n\n*Nota:* {nota_nova}\n*Volumes:* {qtd}\n\nFicamos no aguardo!"
+                        texto_codificado = urllib.parse.quote(texto_msg)
+                        link_wpp = f"https://wa.me/{numero_destino}?text={texto_codificado}"
+                        
+                        st.link_button(f"📱 Enviar aviso no WhatsApp ({transp_nova})", link_wpp, use_container_width=True)
+                        
                 except gspread.WorksheetNotFound:
-                    st.error(f"❌ A aba '{transp_nova}' não foi encontrada nesta planilha. Crie a aba com este nome exato.")
+                    st.error(f"❌ A aba '{transp_nova}' não foi encontrada na planilha.")
                 except Exception as e:
-                    st.error(f"Erro ao salvar os dados. Detalhe: {e}")
+                    st.error(f"Erro ao salvar os dados: {e}")
 
 # --- SEGUNDA ABA: Dar baixa quando o caminhão chega ---
 with aba2:
@@ -75,18 +92,13 @@ with aba2:
                 try:
                     planilha = conectar_planilha()
                     aba_sel = planilha.worksheet(transp_baixa)
-                    
-                    # O sistema procura a nota na planilha
                     celula = aba_sel.find(nota_baixa)
-                    
                     coleta_formatada = data_coleta.strftime("%d/%m/%Y")
-                    # Atualiza APENAS a coluna 4 (DT. COLETA) na linha encontrada
                     aba_sel.update_cell(celula.row, 4, coleta_formatada)
-                    
                     st.success(f"✅ Coleta da nota {nota_baixa} confirmada para {coleta_formatada}!")
                 except gspread.CellNotFound:
                     st.error(f"❌ A Nota {nota_baixa} não foi encontrada na aba {transp_baixa}.")
                 except gspread.WorksheetNotFound:
                     st.error(f"❌ A aba '{transp_baixa}' não foi encontrada.")
                 except Exception as e:
-                    st.error(f"Erro ao atualizar os dados: {e}")
+                    st.error(f"Erro ao atualizar: {e}")

@@ -38,17 +38,61 @@ def obter_dados_gerais():
             pass
     return dados
 
+# ==========================================
+# MENU LATERAL (SIDEBAR) - ASSISTENTE IA
+# ==========================================
+with st.sidebar:
+    st.header("🤖 Assistente IA")
+    st.markdown("Pergunte sobre as mercadorias ou peça para eu redigir e-mails para as transportadoras.")
+    
+    pergunta_usuario = st.text_area("O que você precisa?", placeholder="Ex: Quantas notas o Jarbas tem pendente?")
+    
+    if st.button("Perguntar à IA", use_container_width=True):
+        if pergunta_usuario:
+            with st.spinner("Analisando o estoque..."):
+                try:
+                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                    # CORREÇÃO APLICADA AQUI: usando o modelo mais estável
+                    modelo = genai.GenerativeModel('gemini-pro')
+                    
+                    dados_estoque = obter_dados_gerais()
+                    hoje = datetime.now().strftime("%d/%m/%Y")
+                    
+                    prompt = f"""
+                    Você é um assistente logístico altamente eficiente que ajuda o administrador de um galpão.
+                    Hoje é dia {hoje}. Seja direto, polido e profissional.
+                    Aqui estão os dados em tempo real das planilhas de coleta:
+                    {json.dumps(dados_estoque, ensure_ascii=False)}
+                    
+                    Use EXCLUSIVAMENTE esses dados para responder. Se a resposta não estiver nos dados, avise.
+                    
+                    Responda ao pedido do usuário de forma clara:
+                    "{pergunta_usuario}"
+                    """
+                    
+                    resposta = modelo.generate_content(prompt)
+                    st.success("Resposta:")
+                    st.markdown(f"> {resposta.text}")
+                    
+                except Exception as e:
+                    st.error(f"Erro na IA. Verifique a API Key. Detalhe: {e}")
+        else:
+            st.warning("⚠️ Digite uma pergunta primeiro.")
+
+# ==========================================
+# CORPO PRINCIPAL DO APLICATIVO
+# ==========================================
 st.title("🚚 Gestão de Coletas")
 
 transportadoras = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
 
-# Adicionamos a 4ª Aba para a Inteligência Artificial
-aba1, aba2, aba3, aba4 = st.tabs([
-    "📦 Movimentação", "📊 Painel da Filial", "🔍 Consulta Rápida", "🤖 Assistente IA"
+# O sistema tem as 3 Abas perfeitamente focadas na operação
+aba1, aba2, aba3 = st.tabs([
+    "📦 Movimentação", "📊 Painel da Filial", "🔍 Consulta Rápida"
 ])
 
 # ==========================================
-# ABA 1: MOVIMENTAÇÃO (Lançar e Baixar)
+# ABA 1: MOVIMENTAÇÃO
 # ==========================================
 with aba1:
     st.header("📝 Lançar Nova Solicitação")
@@ -221,48 +265,3 @@ with aba3:
                         """, unsafe_allow_html=True)
                 else:
                     st.error("❌ Esta nota não foi encontrada em nenhuma das planilhas.")
-
-# ==========================================
-# ABA 4: ASSISTENTE IA (NOVIDADE)
-# ==========================================
-with aba4:
-    st.markdown("### 🤖 Assistente Logístico (IA)")
-    st.markdown("Faça perguntas sobre as mercadorias, volumes parados, ou peça para a IA redigir e-mails para as transportadoras.")
-    
-    pergunta_usuario = st.text_area("O que você deseja saber ou fazer?", placeholder="Ex: Quantas notas o Jarbas tem pendente? ou Crie uma mensagem cobrando a FL sobre as notas atrasadas.")
-    
-    if st.button("Perguntar à IA", use_container_width=True):
-        if pergunta_usuario:
-            with st.spinner("A IA está processando as planilhas..."):
-                try:
-                    # Configura a chave do Gemini que você salvou
-                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                    modelo = genai.GenerativeModel('gemini-1.5-flash')
-                    
-                    # Pega os dados atuais do estoque para a IA "ler"
-                    dados_estoque = obter_dados_gerais()
-                    hoje = datetime.now().strftime("%d/%m/%Y")
-                    
-                    # Cria a instrução de fundo para a IA
-                    prompt = f"""
-                    Você é um assistente logístico altamente eficiente que ajuda o administrador de um galpão.
-                    Hoje é dia {hoje}. Seja direto, polido e profissional.
-                    Aqui estão os dados em tempo real das planilhas de coleta (notas lançadas, pendentes, transportadoras):
-                    {json.dumps(dados_estoque, ensure_ascii=False)}
-                    
-                    Use EXCLUSIVAMENTE esses dados para responder. Se a resposta não estiver nos dados, avise.
-                    
-                    Responda ao pedido do usuário de forma clara:
-                    "{pergunta_usuario}"
-                    """
-                    
-                    # Envia para o Gemini e pega a resposta
-                    resposta = modelo.generate_content(prompt)
-                    
-                    st.success("Resposta gerada!")
-                    st.markdown(f"> {resposta.text}")
-                    
-                except Exception as e:
-                    st.error(f"Erro ao conectar com a Inteligência Artificial: Verifique se a chave API está correta nos Secrets. Detalhe técnico: {e}")
-        else:
-            st.warning("⚠️ Digite uma pergunta na caixa de texto antes de enviar.")

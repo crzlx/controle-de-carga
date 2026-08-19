@@ -24,11 +24,11 @@ if "chat_history" not in st.session_state:
     ]
 
 # ==========================================
-# 🎨 CAMADA DE ESTILIZAÇÃO E ANIMAÇÕES CSS
+# 🎨 CSS SEGURO (Apenas Animações e Cores)
 # ==========================================
-css_minimalista = """
+css_seguro = """
 <style>
-/* Entrada fluida e elegante da interface */
+/* Entrada fluida da interface */
 @keyframes fadeSlideUp {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
@@ -51,42 +51,7 @@ div.stButton > button:active {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
 }
 
-/* 💬 BOTÃO FLUTUANTE DO CHATBOT (NOVO) */
-div[data-testid="stPopover"] {
-    position: fixed !important;
-    bottom: 30px !important;
-    right: 30px !important;
-    z-index: 99999 !important;
-}
-div[data-testid="stPopover"] > button {
-    width: 65px !important;
-    height: 65px !important;
-    border-radius: 50% !important;
-    background-color: #2e7bcf !important;
-    color: white !important;
-    font-size: 32px !important;
-    border: none !important;
-    box-shadow: 0 6px 16px rgba(0,0,0,0.3) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
-}
-div[data-testid="stPopover"] > button:hover {
-    transform: scale(1.08) !important;
-    box-shadow: 0 8px 24px rgba(46, 123, 207, 0.5) !important;
-}
-
-/* Janela do ChatBot */
-div[data-testid="stPopoverBody"] {
-    width: 380px !important;
-    border-radius: 16px !important;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important;
-    padding: 15px !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
-}
-
-/* Hover clean nas métricas */
+/* Hover nas métricas */
 div[data-testid="stMetric"] {
     transition: all 0.2s ease !important;
     padding: 12px !important;
@@ -98,7 +63,7 @@ div[data-testid="stMetric"]:hover {
 }
 </style>
 """
-st.markdown(css_minimalista, unsafe_allow_html=True)
+st.markdown(css_seguro, unsafe_allow_html=True)
 
 # ==========================================
 # LÓGICA DE E-MAILS OTIMIZADA
@@ -195,11 +160,57 @@ def obter_dados_gerais():
     return dados
 
 # ==========================================
-# SIDEBAR - AGORA APENAS USUÁRIO
+# SIDEBAR - USUÁRIO E CHAT SEGURO
 # ==========================================
 with st.sidebar:
     st.header("👤 Operador")
     usuario_atual = st.selectbox("Identificação:", ["Pedro", "Alessandro", "Outro"])
+    
+    st.markdown("---")
+    
+    # CHAT IA SEGURO (Abre uma janela sem travar a tela)
+    popover_chat = st.popover("💬 Falar com Alessandro IA", use_container_width=True)
+    with popover_chat:
+        st.markdown("### 🤖 Alessandro IA")
+        
+        # Caixa de histórico
+        box_mensagens = st.container(height=350)
+        with box_mensagens:
+            for msg in st.session_state.chat_history:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+        
+        # Input do Chat
+        with st.form("chat_form", clear_on_submit=True):
+            col_in, col_btn = st.columns([4, 1])
+            with col_in:
+                nova_msg = st.text_input("Mensagem", label_visibility="collapsed", placeholder="O que você precisa?", autocomplete="off")
+            with col_btn:
+                submit_chat = st.form_submit_button("➤")
+                
+            if submit_chat and nova_msg:
+                st.session_state.chat_history.append({"role": "user", "content": nova_msg})
+                with st.spinner("Analisando..."):
+                    try:
+                        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                        modelo = genai.GenerativeModel('gemini-3.6-flash')
+                        dados_estoque = obter_dados_gerais()
+                        hoje = datetime.now().strftime("%d/%m/%Y")
+                        dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Solicitacao"] == hoje]
+                        
+                        historico = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-5:]])
+                        
+                        prompt = f"""
+                        O seu nome é Alessandro IA. Você é um assistente logístico. Hoje é {hoje}. 
+                        DADOS: {json.dumps(dados_filtrados, ensure_ascii=False)}
+                        HISTÓRICO RECENTE: {historico}
+                        Responda à pergunta: "{nova_msg}"
+                        """
+                        resposta = modelo.generate_content(prompt)
+                        st.session_state.chat_history.append({"role": "assistant", "content": resposta.text})
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro: {e}")
 
 # ==========================================
 # CORPO PRINCIPAL
@@ -520,51 +531,3 @@ with aba4:
                         st.experimental_rerun()
                 except Exception as e:
                     st.error(f"Erro ao excluir: {e}")
-
-# ==========================================
-# 💬 ALESSANDRO IA - CHAT FLUTUANTE
-# ==========================================
-with st.popover("🤖", help="Conversar com Alessandro IA"):
-    st.markdown("### 🤖 Alessandro IA")
-    
-    # Caixa do chat rolável
-    box_mensagens = st.container(height=350)
-    with box_mensagens:
-        for msg in st.session_state.chat_history:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-    
-    # Input do Chat
-    with st.form("chat_form", clear_on_submit=True):
-        col_in, col_btn = st.columns([4, 1])
-        with col_in:
-            nova_msg = st.text_input("Mensagem", label_visibility="collapsed", placeholder="O que você precisa?", autocomplete="off")
-        with col_btn:
-            submit_chat = st.form_submit_button("➤")
-            
-        if submit_chat and nova_msg:
-            # Salva na memória
-            st.session_state.chat_history.append({"role": "user", "content": nova_msg})
-            
-            with st.spinner("Analisando..."):
-                try:
-                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                    modelo = genai.GenerativeModel('gemini-3.6-flash')
-                    dados_estoque = obter_dados_gerais()
-                    hoje = datetime.now().strftime("%d/%m/%Y")
-                    dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Solicitacao"] == hoje]
-                    
-                    historico = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-5:]])
-                    
-                    prompt = f"""
-                    O seu nome é Alessandro IA. Você é um assistente logístico rápido e prestativo.
-                    Hoje é dia {hoje}. 
-                    DADOS: {json.dumps(dados_filtrados, ensure_ascii=False)}
-                    HISTÓRICO RECENTE: {historico}
-                    Responda à pergunta: "{nova_msg}"
-                    """
-                    resposta = modelo.generate_content(prompt)
-                    st.session_state.chat_history.append({"role": "assistant", "content": resposta.text})
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro: {e}")

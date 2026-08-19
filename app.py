@@ -42,7 +42,7 @@ def obter_dados_gerais():
 # MENU LATERAL (SIDEBAR) - ASSISTENTE IA
 # ==========================================
 with st.sidebar:
-    st.header("🤖 Assistente IA")
+    st.header("🤖 Alessandro IA")
     st.markdown("Pergunte sobre as mercadorias ou peça para eu redigir e-mails para as transportadoras.")
     
     pergunta_usuario = st.text_area("O que você precisa?", placeholder="Ex: Quantas notas o Jarbas tem pendente?")

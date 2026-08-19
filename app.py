@@ -34,6 +34,7 @@ def disparar_email_silencioso(transportadora, nota, qtd):
             msg['From'] = remetente
             msg['To'] = destinatario 
             
+            # O e-mail continua limpo, sem mostrar a Data de Emissão para fora!
             corpo_email = f"""
 Olá, equipe da {transportadora}!
 
@@ -84,8 +85,9 @@ def obter_dados_gerais():
                         "Transportadora": transp,
                         "QTD": l[0].strip() if len(l) > 0 else "-",
                         "Nota": str(l[1]).strip(),
-                        "Data_Emissao": l[2].strip() if len(l) > 2 else "-",
-                        "Data_Coleta": l[3].strip() if len(l) > 3 else ""
+                        "Data_Solicitacao": l[2].strip() if len(l) > 2 else "-", # Dia que pediu a coleta
+                        "Data_Coleta": l[3].strip() if len(l) > 3 else "",       # Dia que o caminhão levou
+                        "Data_Emissao_Nota": l[4].strip() if len(l) > 4 else "-" # NOVA COLUNA: Dia da NFe
                     })
         except:
             pass
@@ -110,7 +112,7 @@ with st.sidebar:
                     dados_estoque = obter_dados_gerais()
                     hoje = datetime.now().strftime("%d/%m/%Y")
                     
-                    dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Emissao"] == hoje]
+                    dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Solicitacao"] == hoje]
                     
                     prompt = f"""
                     O seu nome é Alessandro IA.
@@ -158,9 +160,11 @@ with aba1:
         col1, col2 = st.columns(2)
         with col1:
             qtd = st.number_input("QTD", min_value=1, step=1)
-            data_emissao = st.date_input("Data da Solicitação", format="DD/MM/YYYY")
+            data_solicitacao = st.date_input("Data da Solicitação", format="DD/MM/YYYY")
         with col2:
             nota_nova = st.text_input("Nota (Nº)")
+            # NOVO CAMPO: Emissão da NFe
+            data_emissao = st.date_input("Data de Emissão da Nota", format="DD/MM/YYYY")
             
         enviar_nova = st.form_submit_button("Registrar Nota", use_container_width=True)
         
@@ -171,9 +175,12 @@ with aba1:
                 try:
                     planilha = conectar_planilha()
                     aba_sel = planilha.worksheet(transp_nova)
-                    data_formatada = data_emissao.strftime("%d/%m/%Y")
                     
-                    aba_sel.append_row([qtd, nota_nova, data_formatada, ""])
+                    formatada_solicitacao = data_solicitacao.strftime("%d/%m/%Y")
+                    formatada_emissao = data_emissao.strftime("%d/%m/%Y")
+                    
+                    # Salva na ordem: QTD, NOTA, DATA_SOLICITACAO, DATA_COLETA (Vazio), DATA_EMISSAO_NOTA
+                    aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao])
                     st.success(f"✅ Nota {nota_nova} registrada com sucesso na aba {transp_nova}!")
                     
                     resultado_email = disparar_email_silencioso(transp_nova, nota_nova, qtd)
@@ -190,30 +197,26 @@ with aba1:
     st.markdown("---")
     
     # ==========================================
-    # NOVO SISTEMA DE BAIXA INTELIGENTE
+    # SISTEMA DE BAIXA INTELIGENTE
     # ==========================================
     st.header("✅ Confirmar Coleta em Lote")
     st.markdown("Selecione o caminhão e marque as notas que ele está levando hoje.")
     
-    # O seletor fica fora do formulário para atualizar a lista automaticamente
     transp_baixa = st.selectbox("Transportadora (Baixa)", transportadoras, key="t2")
     
     dados_totais = obter_dados_gerais()
-    # Filtra apenas as notas da transportadora escolhida que ainda não têm data de coleta
     pendentes_transp = [d for d in dados_totais if d["Transportadora"] == transp_baixa and d["Data_Coleta"] == ""]
     
     if pendentes_transp:
         with st.form("form_baixa"):
-            st.markdown(f"📦 **Notas pendentes na doca ({transp_baixa}):**")
+            st.markdown(f"📦 **Notas pendentes na filial ({transp_baixa}):**")
             
-            # Cria os checkboxes dinamicamente
             checkboxes_notas = {}
             for p in pendentes_transp:
-                label = f"Nº {p['Nota']} — {p['QTD']} volumes (Solicitada em: {p['Data_Emissao']})"
+                label = f"Nº {p['Nota']} — {p['QTD']} volumes (Solicitada em: {p['Data_Solicitacao']})"
                 checkboxes_notas[p['Nota']] = st.checkbox(label)
                 
             st.markdown("---")
-            # Uma única data para todas as selecionadas
             data_coleta = st.date_input("Data da Coleta Real (para as selecionadas acima)", format="DD/MM/YYYY")
             
             enviar_baixa = st.form_submit_button("Confirmar Baixa nas Selecionadas", use_container_width=True)
@@ -236,7 +239,6 @@ with aba1:
                                 
                             st.success(f"✅ Baixa confirmada para as notas: {', '.join(notas_selecionadas)}!")
                             
-                            # Atualiza a tela para as notas desaparecerem da lista imediatamente
                             try:
                                 st.rerun()
                             except AttributeError:
@@ -258,7 +260,7 @@ with aba2:
             dados = obter_dados_gerais()
             hoje = datetime.now().strftime("%d/%m/%Y")
             
-            lancadas_hoje = [d for d in dados if d["Data_Emissao"] == hoje]
+            lancadas_hoje = [d for d in dados if d["Data_Solicitacao"] == hoje]
             coletadas_hoje = [d for d in dados if d["Data_Coleta"] == hoje]
             pendentes_lista = [d for d in dados if d["Data_Coleta"] == ""]
             
@@ -301,7 +303,7 @@ with aba2:
                 agrupado_pendentes = {}
                 for d in pendentes_lista:
                     t = d["Transportadora"]
-                    agrupado_pendentes.setdefault(t, []).append(f"Nº {d['Nota']} ({d['QTD']} vol - req: {d['Data_Emissao']})")
+                    agrupado_pendentes.setdefault(t, []).append(f"Nº {d['Nota']} ({d['QTD']} vol - req: {d['Data_Solicitacao']})")
                 
                 for transp, notas in agrupado_pendentes.items():
                     texto_relatorio += f"\n⚠️ *{transp}* ({len(notas)}):\n"
@@ -337,7 +339,8 @@ with aba3:
                             <b>Status:</b> {status}<br>
                             <b>Transportadora:</b> {nota['Transportadora']}<br>
                             <b>QTD Volumes:</b> {nota['QTD']}<br>
-                            <b>Solicitada em:</b> {nota['Data_Emissao']}<br>
+                            <b>Emissão da NFe:</b> {nota['Data_Emissao_Nota']}<br>
+                            <b>Solicitada Coleta em:</b> {nota['Data_Solicitacao']}<br>
                             <b>Coletada em:</b> {nota['Data_Coleta'] if nota['Data_Coleta'] != "" else "Ainda na filial"}
                         </div>
                         """, unsafe_allow_html=True)

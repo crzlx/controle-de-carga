@@ -15,7 +15,7 @@ def conectar_planilha():
     cliente = gspread.authorize(credenciais)
     return cliente.open_by_url("https://docs.google.com/spreadsheets/d/1yHThW-nbcwxCcNTnb66PP1YHbHpCE9_ep3DC33-OZs4/edit?usp=sharing")
 
-# Função inteligente que lê todas as planilhas de uma vez
+# Função que lê os dados de forma otimizada
 def obter_dados_gerais():
     planilha = conectar_planilha()
     dados = []
@@ -25,7 +25,7 @@ def obter_dados_gerais():
         try:
             aba = planilha.worksheet(transp)
             linhas = aba.get_all_values()
-            for l in linhas[1:]: # Pula o cabeçalho
+            for l in linhas[1:]:
                 if len(l) >= 2 and str(l[1]).strip() != "":
                     dados.append({
                         "Transportadora": transp,
@@ -42,14 +42,18 @@ st.title("🚚 Gestão de Coletas")
 
 transportadoras = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
 
-# Cria as 6 Abas do Sistema
-aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs([
-    "📝 Lançar", "✅ Baixar", "📊 Pendências", "📈 Dash", "🔍 Buscar", "📋 Resumo"
+# --- O SISTEMA AGORA TEM APENAS 3 ABAS ---
+aba1, aba2, aba3 = st.tabs([
+    "📦 Movimentação", "📊 Painel da Filial", "🔍 Consulta Rápida"
 ])
 
-# --- ABA 1: LANÇAR ---
+# ==========================================
+# ABA 1: MOVIMENTAÇÃO (Lançar e Dar Baixa juntos)
+# ==========================================
 with aba1:
-    st.markdown("Registre a nota separada para coleta.")
+    st.header("📝 Lançar Nova Solicitação")
+    st.markdown("Registre a nota que acabou de ser separada no estoque.")
+    
     with st.form("form_nova", clear_on_submit=True):
         transp_nova = st.selectbox("Transportadora", transportadoras, key="t1")
         
@@ -91,18 +95,20 @@ with aba1:
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
 
-# --- ABA 2: BAIXAR ---
-with aba2:
-    st.markdown("Confirme que a mercadoria foi levada.")
+    st.markdown("---")
+    
+    st.header("✅ Confirmar Coleta")
+    st.markdown("Dê a baixa quando o caminhão vier levar a mercadoria.")
+    
     with st.form("form_baixa", clear_on_submit=True):
-        transp_baixa = st.selectbox("Transportadora", transportadoras, key="t2")
+        transp_baixa = st.selectbox("Transportadora (Baixa)", transportadoras, key="t2")
         col3, col4 = st.columns(2)
         with col3:
-            nota_baixa = st.text_input("Nota (Nº)")
+            nota_baixa = st.text_input("Nota (Nº) para baixar")
         with col4:
-            data_coleta = st.date_input("Data da Coleta", format="DD/MM/YYYY")
+            data_coleta = st.date_input("Data da Coleta Real", format="DD/MM/YYYY")
             
-        enviar_baixa = st.form_submit_button("Confirmar Coleta", use_container_width=True)
+        enviar_baixa = st.form_submit_button("Confirmar Baixa", use_container_width=True)
         
         if enviar_baixa:
             if nota_baixa == "":
@@ -114,102 +120,50 @@ with aba2:
                     celula = aba_sel.find(nota_baixa)
                     coleta_formatada = data_coleta.strftime("%d/%m/%Y")
                     aba_sel.update_cell(celula.row, 4, coleta_formatada)
-                    st.success(f"✅ Coleta {nota_baixa} confirmada!")
+                    st.success(f"✅ Baixa da nota {nota_baixa} confirmada para {coleta_formatada}!")
                 except gspread.CellNotFound:
                     st.error(f"❌ Nota {nota_baixa} não encontrada na {transp_baixa}.")
                 except Exception as e:
                     st.error(f"Erro: {e}")
 
-# --- ABA 3: PENDÊNCIAS ---
-with aba3:
-    st.markdown("### 📊 Notas Aguardando Coleta")
-    if st.button("🔄 Buscar Pendências", use_container_width=True):
-        with st.spinner("Lendo planilhas..."):
-            dados = obter_dados_gerais()
-            pendentes = [d for d in dados if d["Data_Coleta"] == ""]
-            
-            if pendentes:
-                st.warning(f"🚚 Existem **{len(pendentes)}** notas paradas na doca.")
-                st.dataframe(pendentes, use_container_width=True, hide_index=True)
-            else:
-                st.success("🎉 Nenhuma pendência!")
-
-# --- ABA 4: DASHBOARD MINIMALISTA ---
-with aba4:
-    st.markdown("### 📈 Painel de Operação de Hoje")
-    if st.button("🔄 Atualizar Números", use_container_width=True):
-        with st.spinner("Calculando..."):
+# ==========================================
+# ABA 2: PAINEL DA FILIAL (Tudo em um só clique)
+# ==========================================
+with aba2:
+    st.markdown("### 📊 Visão Geral do Estoque")
+    st.markdown("Acompanhe os números e gere o relatório gerencial com apenas um clique.")
+    
+    if st.button("🔄 Atualizar Painel e Gerar Relatório", use_container_width=True):
+        with st.spinner("Analisando as planilhas..."):
             dados = obter_dados_gerais()
             hoje = datetime.now().strftime("%d/%m/%Y")
             
             lancadas_hoje = [d for d in dados if d["Data_Emissao"] == hoje]
             coletadas_hoje = [d for d in dados if d["Data_Coleta"] == hoje]
-            pendentes_total = [d for d in dados if d["Data_Coleta"] == ""]
-            
-            c1, c2, c3 = st.columns(3)
-            c1.metric("📦 Lançadas Hoje", len(lancadas_hoje))
-            c2.metric("✅ Coletadas Hoje", len(coletadas_hoje))
-            c3.metric("⏳ Pendentes (Total)", len(pendentes_total))
-            
-            st.markdown("---")
-            st.write("**Top Coletas de Hoje (Por Transportadora):**")
-            transp_hoje = {}
-            for d in coletadas_hoje:
-                t = d["Transportadora"]
-                transp_hoje[t] = transp_hoje.get(t, 0) + 1
-            
-            if transp_hoje:
-                st.dataframe([{"Transportadora": k, "Notas Coletadas Hoje": v} for k, v in transp_hoje.items()], hide_index=True, use_container_width=True)
-            else:
-                st.info("Nenhuma coleta finalizada no dia de hoje ainda.")
-
-# --- ABA 5: RASTREADOR (BUSCAR NOTA) ---
-with aba5:
-    st.markdown("### 🔍 Pesquisa Rápida")
-    st.markdown("Alguém perguntou de uma nota? Digite abaixo para achar na hora.")
-    nota_busca = st.text_input("Número da Nota:")
-    
-    if st.button("Buscar", use_container_width=True):
-        if nota_busca:
-            with st.spinner("Procurando em todas as planilhas..."):
-                dados = obter_dados_gerais()
-                encontradas = [d for d in dados if d["Nota"] == nota_busca.strip()]
-                
-                if encontradas:
-                    for nota in encontradas:
-                        status = "✅ Já Coletada" if nota["Data_Coleta"] != "" else "⏳ Aguardando Coleta na Doca"
-                        cor_status = "#d4edda" if nota["Data_Coleta"] != "" else "#fff3cd"
-                        cor_texto = "#155724" if nota["Data_Coleta"] != "" else "#856404"
-                        
-                        st.markdown(f"""
-                        <div style="background-color: {cor_status}; color: {cor_texto}; padding: 15px; border-radius: 10px; margin-top: 10px;">
-                            <h4 style="margin-top:0;">Nota: {nota['Nota']}</h4>
-                            <b>Status:</b> {status}<br>
-                            <b>Transportadora:</b> {nota['Transportadora']}<br>
-                            <b>QTD Volumes:</b> {nota['QTD']}<br>
-                            <b>Solicitada em:</b> {nota['Data_Emissao']}<br>
-                            <b>Coletada em:</b> {nota['Data_Coleta'] if nota['Data_Coleta'] != "" else "Ainda não coletada"}
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.error("❌ Esta nota não foi encontrada em nenhuma transportadora.")
-
-# --- ABA 6: FECHAMENTO DO DIA (RELATÓRIO DETALHADO) ---
-with aba6:
-    st.markdown("### 📋 Relatório")
-    st.markdown("Aperte o botão para gerar o texto super detalhado do fim de turno.")
-    
-    if st.button("Gerar Relatório de Hoje", use_container_width=True):
-        with st.spinner("Montando relatório analítico..."):
-            dados = obter_dados_gerais()
-            hoje = datetime.now().strftime("%d/%m/%Y")
-            
-            coletadas_hoje = [d for d in dados if d["Data_Coleta"] == hoje]
             pendentes_lista = [d for d in dados if d["Data_Coleta"] == ""]
+            
+            # --- 1. INDICADORES DO DIA ---
+            st.markdown("---")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("📦 Separadas Hoje", len(lancadas_hoje))
+            c2.metric("✅ Coletadas Hoje", len(coletadas_hoje))
+            c3.metric("⏳ Paradas na Filial", len(pendentes_lista))
+            
+            # --- 2. LISTA DE PENDÊNCIAS ---
+            st.markdown("---")
+            st.subheader("🚛 Mercadorias Aguardando Coleta")
+            if pendentes_lista:
+                st.warning(f"Temos **{len(pendentes_lista)}** notas no galpão aguardando as transportadoras.")
+                st.dataframe(pendentes_lista, use_container_width=True, hide_index=True)
+            else:
+                st.success("🎉 Nenhuma pendência! O estoque está 100% limpo.")
+
+            # --- 3. RELATÓRIO DE FECHAMENTO ---
+            st.markdown("---")
+            st.subheader("📋 Resumo do Turno (Copiar e Colar)")
             
             texto_relatorio = f"📊 *FECHAMENTO DE COLETAS - {hoje}*\n\n"
             
-            # --- SEÇÃO 1: COLETADAS HOJE ---
             texto_relatorio += f"✅ *COLETAS FINALIZADAS HOJE:* {len(coletadas_hoje)} nota(s)\n"
             if coletadas_hoje:
                 agrupado_coletadas = {}
@@ -225,7 +179,6 @@ with aba6:
                 
             texto_relatorio += "\n" + "-"*30 + "\n\n"
             
-            # --- SEÇÃO 2: PENDÊNCIAS NA DOCA ---
             texto_relatorio += f"⏳ *PENDÊNCIAS NA FILIAL:* {len(pendentes_lista)} nota(s) aguardando\n"
             if pendentes_lista:
                 agrupado_pendentes = {}
@@ -238,7 +191,39 @@ with aba6:
                     for n in notas:
                         texto_relatorio += f"   ↳ {n}\n"
             else:
-                texto_relatorio += "Nenhuma pendência!🎉\n"
+                texto_relatorio += "Nenhuma pendência! Galpão limpo. 🎉\n"
             
-            st.success("Relatório detalhado gerado! Clique dentro da caixa abaixo, copie e cole no WhatsApp/Teams.")
-            st.text_area("Texto Copiável:", value=texto_relatorio, height=450)
+            st.text_area("Texto Copiável (Para enviar no WhatsApp/Teams):", value=texto_relatorio, height=350)
+
+# ==========================================
+# ABA 3: CONSULTA RÁPIDA
+# ==========================================
+with aba3:
+    st.markdown("### 🔍 Pesquisa de Status")
+    st.markdown("Procure pelo número da nota para tirar dúvidas rapidamente.")
+    nota_busca = st.text_input("Digite o Número da Nota:")
+    
+    if st.button("Procurar Nota", use_container_width=True):
+        if nota_busca:
+            with st.spinner("Buscando no histórico..."):
+                dados = obter_dados_gerais()
+                encontradas = [d for d in dados if d["Nota"] == nota_busca.strip()]
+                
+                if encontradas:
+                    for nota in encontradas:
+                        status = "✅ Já Coletada" if nota["Data_Coleta"] != "" else "⏳ Aguardando no Galpão"
+                        cor_status = "#d4edda" if nota["Data_Coleta"] != "" else "#fff3cd"
+                        cor_texto = "#155724" if nota["Data_Coleta"] != "" else "#856404"
+                        
+                        st.markdown(f"""
+                        <div style="background-color: {cor_status}; color: {cor_texto}; padding: 15px; border-radius: 10px; margin-top: 10px;">
+                            <h4 style="margin-top:0;">Nota: {nota['Nota']}</h4>
+                            <b>Status:</b> {status}<br>
+                            <b>Transportadora:</b> {nota['Transportadora']}<br>
+                            <b>QTD Volumes:</b> {nota['QTD']}<br>
+                            <b>Solicitada em:</b> {nota['Data_Emissao']}<br>
+                            <b>Coletada em:</b> {nota['Data_Coleta'] if nota['Data_Coleta'] != "" else "Ainda na filial"}
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.error("❌ Esta nota não foi encontrada em nenhuma das planilhas.")

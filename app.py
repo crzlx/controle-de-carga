@@ -22,7 +22,7 @@ def disparar_email_silencioso(transportadora, nota, qtd):
         
         # LISTA DE E-MAILS DAS TRANSPORTADORAS (Separe por vírgula para mandar para vários!)
         emails_destino = {
-            "JARBAS": "email_do_jarbas@teste.com, email2_do_jarbas@teste.com",
+            "JARBAS": "adm.campos@italogrj.com.br",
             "TRANSCHERRER": "filial.campos@transcherrer.com.br, cidy.neves@transcherrer.com.br, filial.campos02@transcherrer.com.br",
             "FL": "email_da_fl@teste.com",
             "GENEROSO": "email_do_generoso@teste.com"
@@ -31,7 +31,7 @@ def disparar_email_silencioso(transportadora, nota, qtd):
         destinatario = emails_destino.get(transportadora)
         
         # O código só dispara se não for o texto de "teste" padrão
-        if destinatario and "teste.com" not in destinatario.lower() or transportadora == "TRANSCHERRER":
+        if destinatario and "teste.com" not in destinatario.lower() or transportadora == "TRANSCHERRER" or transportadora == "JARBAS":
             # Monta o visual da mensagem
             msg = EmailMessage()
             msg['Subject'] = f"Nova Coleta Liberada - Speedmax (Nota: {nota})"

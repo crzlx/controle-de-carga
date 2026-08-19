@@ -160,7 +160,51 @@ def obter_dados_gerais():
     return dados
 
 # ==========================================
-# SIDEBAR - USUÁRIO E CHAT SEGURO
+# 🤖 CHATBOT FLUTUANTE (MODAL CENTRAL)
+# ==========================================
+@st.dialog("🤖 Chat com Alessandro IA")
+def abrir_chat_ia():
+    # Área do histórico de mensagens
+    box_mensagens = st.container(height=350)
+    with box_mensagens:
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+    
+    # Campo de digitação
+    with st.form("chat_form", clear_on_submit=True):
+        col_in, col_btn = st.columns([4, 1])
+        with col_in:
+            nova_msg = st.text_input("Mensagem", label_visibility="collapsed", placeholder="O que você precisa?", autocomplete="off")
+        with col_btn:
+            submit_chat = st.form_submit_button("➤", use_container_width=True)
+            
+        if submit_chat and nova_msg:
+            st.session_state.chat_history.append({"role": "user", "content": nova_msg})
+            with st.spinner("Analisando..."):
+                try:
+                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                    modelo = genai.GenerativeModel('gemini-3.6-flash')
+                    dados_estoque = obter_dados_gerais()
+                    hoje = datetime.now().strftime("%d/%m/%Y")
+                    dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Solicitacao"] == hoje]
+                    
+                    historico = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-5:]])
+                    
+                    prompt = f"""
+                    O seu nome é Alessandro IA. Você é um assistente logístico. Hoje é {hoje}. 
+                    DADOS: {json.dumps(dados_filtrados, ensure_ascii=False)}
+                    HISTÓRICO RECENTE: {historico}
+                    Responda à pergunta: "{nova_msg}"
+                    """
+                    resposta = modelo.generate_content(prompt)
+                    st.session_state.chat_history.append({"role": "assistant", "content": resposta.text})
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+
+# ==========================================
+# SIDEBAR - MENU DE USUÁRIO E BOTÃO DO CHAT
 # ==========================================
 with st.sidebar:
     st.header("👤 Operador")
@@ -168,49 +212,9 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # CHAT IA SEGURO (Abre uma janela sem travar a tela)
-    popover_chat = st.popover("💬 Falar com Alessandro IA", use_container_width=True)
-    with popover_chat:
-        st.markdown("### 🤖 Alessandro IA")
-        
-        # Caixa de histórico
-        box_mensagens = st.container(height=350)
-        with box_mensagens:
-            for msg in st.session_state.chat_history:
-                with st.chat_message(msg["role"]):
-                    st.markdown(msg["content"])
-        
-        # Input do Chat
-        with st.form("chat_form", clear_on_submit=True):
-            col_in, col_btn = st.columns([4, 1])
-            with col_in:
-                nova_msg = st.text_input("Mensagem", label_visibility="collapsed", placeholder="O que você precisa?", autocomplete="off")
-            with col_btn:
-                submit_chat = st.form_submit_button("➤")
-                
-            if submit_chat and nova_msg:
-                st.session_state.chat_history.append({"role": "user", "content": nova_msg})
-                with st.spinner("Analisando..."):
-                    try:
-                        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                        modelo = genai.GenerativeModel('gemini-3.6-flash')
-                        dados_estoque = obter_dados_gerais()
-                        hoje = datetime.now().strftime("%d/%m/%Y")
-                        dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Solicitacao"] == hoje]
-                        
-                        historico = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-5:]])
-                        
-                        prompt = f"""
-                        O seu nome é Alessandro IA. Você é um assistente logístico. Hoje é {hoje}. 
-                        DADOS: {json.dumps(dados_filtrados, ensure_ascii=False)}
-                        HISTÓRICO RECENTE: {historico}
-                        Responda à pergunta: "{nova_msg}"
-                        """
-                        resposta = modelo.generate_content(prompt)
-                        st.session_state.chat_history.append({"role": "assistant", "content": resposta.text})
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro: {e}")
+    # Botão que aciona a Janela Flutuante (Modal) no meio da tela
+    if st.button("💬 Falar com Alessandro IA", use_container_width=True):
+        abrir_chat_ia()
 
 # ==========================================
 # CORPO PRINCIPAL

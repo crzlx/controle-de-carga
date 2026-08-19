@@ -9,6 +9,7 @@ import smtplib
 from email.message import EmailMessage
 import csv
 import io
+import pandas as pd
 
 # Configuração da Página
 st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="centered")
@@ -295,20 +296,25 @@ with aba2:
             c2.metric("✅ Coletadas Hoje", len(coletadas_hoje))
             c3.metric("⏳ Paradas na Filial", len(pendentes_lista))
             
-            # NOVO: Gráfico Minimalista
+            # NOVO: Gráfico Minimalista (Agora com os nomes corretos usando Pandas!)
             st.markdown("---")
             st.subheader("📈 Cargas Pendentes por Transportadora")
             contagem_transp = {t: 0 for t in transportadoras}
             for p in pendentes_lista:
                 contagem_transp[p["Transportadora"]] += 1
-            st.bar_chart(contagem_transp)
+                
+            df_grafico = pd.DataFrame({
+                "Transportadora": list(contagem_transp.keys()),
+                "Notas Pendentes": list(contagem_transp.values())
+            })
+            st.bar_chart(df_grafico, x="Transportadora", y="Notas Pendentes")
             
             st.markdown("---")
             st.subheader("🚛 Mercadorias Aguardando Coleta")
             if pendentes_lista:
                 st.warning(f"Temos **{len(pendentes_lista)}** notas no galpão aguardando as transportadoras.")
                 
-                # NOVO: Calculador de SLA de Atraso
+                # Calculador de SLA de Atraso
                 lista_sla = []
                 for p in pendentes_lista:
                     item = dict(p)
@@ -351,7 +357,8 @@ with aba2:
                 agrupado_pendentes = {}
                 for d in pendentes_lista:
                     t = d["Transportadora"]
-                    agrupado_pendentes.setdefault(t, []).append(f"Nº {d['Nota']} ({d['QTD']} vol - req: {d['Data_Solicitacao']})")
+                    # NOVO: Adicionada a data de emissão no texto copiável!
+                    agrupado_pendentes.setdefault(t, []).append(f"Nº {d['Nota']} ({d['QTD']} vol - emissão: {d['Data_Emissao_Nota']} - req: {d['Data_Solicitacao']})")
                 
                 for transp, notas in agrupado_pendentes.items():
                     texto_relatorio += f"\n⚠️ *{transp}* ({len(notas)}):\n"
@@ -362,7 +369,7 @@ with aba2:
             
             st.text_area("Texto Copiável:", value=texto_relatorio, height=350)
             
-            # NOVO: Exportar para CSV
+            # Exportar para CSV
             st.markdown("---")
             st.subheader("💾 Exportar Banco de Dados")
             output = io.StringIO()
@@ -380,39 +387,6 @@ with aba2:
             )
 
 # ==========================================
-# ABA 3: CONSULTA RÁPIDA
-# ==========================================
-with aba3:
-    st.markdown("### 🔍 Pesquisa de Status")
-    nota_busca = st.text_input("Digite o Número da Nota:")
-    
-    if st.button("Procurar Nota", use_container_width=True):
-        if nota_busca:
-            with st.spinner("Buscando no histórico..."):
-                dados = obter_dados_gerais()
-                encontradas = [d for d in dados if d["Nota"] == nota_busca.strip()]
-                
-                if encontradas:
-                    for nota in encontradas:
-                        status = "✅ Já Coletada" if nota["Data_Coleta"] != "" else "⏳ Aguardando no Galpão"
-                        cor_status = "#d4edda" if nota["Data_Coleta"] != "" else "#fff3cd"
-                        cor_texto = "#155724" if nota["Data_Coleta"] != "" else "#856404"
-                        
-                        st.markdown(f"""
-                        <div style="background-color: {cor_status}; color: {cor_texto}; padding: 15px; border-radius: 10px; margin-top: 10px;">
-                            <h4 style="margin-top:0;">Nota: {nota['Nota']}</h4>
-                            <b>Status:</b> {status}<br>
-                            <b>Transportadora:</b> {nota['Transportadora']}<br>
-                            <b>QTD Volumes:</b> {nota['QTD']}<br>
-                            <b>Emissão da NFe:</b> {nota['Data_Emissao_Nota']}<br>
-                            <b>Solicitada Coleta em:</b> {nota['Data_Solicitacao']}<br>
-                            <b>Coletada em:</b> {nota['Data_Coleta'] if nota['Data_Coleta'] != "" else "Ainda na filial"}
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.error("❌ Esta nota não foi encontrada em nenhuma das planilhas.")
-
-# ==========================================
 # ABA 4: GERENCIAR E COBRAR (NOVA ABA)
 # ==========================================
 with aba4:
@@ -428,7 +402,6 @@ with aba4:
                 encontradas = [d for d in dados if d["Nota"] == nota_alvo.strip()]
                 
                 if encontradas:
-                    # Salva a nota na sessão para a tela não sumir ao clicar nos botões
                     st.session_state['nota_gerenciar'] = encontradas[0]
                 else:
                     st.error("❌ Nota não encontrada no banco de dados.")
@@ -478,7 +451,6 @@ with aba4:
                             aba = planilha.worksheet(n["Transportadora"])
                             cel = aba.find(n["Nota"])
                             
-                            # Atualiza célula por célula para evitar quebra no Gspread
                             aba.update_cell(cel.row, 1, nova_qtd)
                             aba.update_cell(cel.row, 3, nova_sol)
                             aba.update_cell(cel.row, 4, nova_coleta)

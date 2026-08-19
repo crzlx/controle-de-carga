@@ -49,18 +49,15 @@ with st.sidebar:
     
     if st.button("Perguntar à IA", use_container_width=True):
         if pergunta_usuario:
-            with st.spinner("Conectando ao cérebro da IA..."):
+            with st.spinner("Analisando o estoque..."):
                 try:
-                    # 1. Configura a chave
                     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                     
-                    # 2. CÓDIGO INTELIGENTE: Pede para o Google a lista de modelos permitidos para esta chave
                     modelos_disponiveis = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
                     
                     if not modelos_disponiveis:
-                        st.error("❌ A sua Chave API foi aceita, mas ela não tem permissão para gerar textos. Verifique o Google AI Studio.")
+                        st.error("❌ A sua Chave API não tem permissão para gerar textos.")
                     else:
-                        # 3. O aplicativo escolhe o melhor modelo disponível na sua lista
                         modelo_ideal = None
                         for m in modelos_disponiveis:
                             if 'gemini-1.5-flash' in m:
@@ -70,21 +67,23 @@ with st.sidebar:
                                 modelo_ideal = m
                                 
                         if not modelo_ideal:
-                            modelo_ideal = modelos_disponiveis[0] # Se não achar os nomes padrão, pega o primeiro que funcionar
+                            modelo_ideal = modelos_disponiveis[0]
                         
-                        # Inicia a IA com o modelo exato que o Google autorizou
                         modelo = genai.GenerativeModel(modelo_ideal)
                         
                         dados_estoque = obter_dados_gerais()
                         hoje = datetime.now().strftime("%d/%m/%Y")
                         
+                        # FILTRO DE SEGURANÇA: A IA só lê as notas pendentes ou mexidas hoje para não estourar o limite.
+                        dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Emissao"] == hoje]
+                        
                         prompt = f"""
                         Você é um assistente logístico altamente eficiente que ajuda o administrador de um galpão.
                         Hoje é dia {hoje}. Seja direto, polido e profissional.
-                        Aqui estão os dados em tempo real das planilhas de coleta:
-                        {json.dumps(dados_estoque, ensure_ascii=False)}
+                        Aqui estão os dados resumidos das notas pendentes na filial e das operações de hoje:
+                        {json.dumps(dados_filtrados, ensure_ascii=False)}
                         
-                        Use EXCLUSIVAMENTE esses dados para responder. Se a resposta não estiver nos dados, avise.
+                        Use EXCLUSIVAMENTE esses dados para responder. Se a resposta exigir uma nota antiga que não está aqui, avise que você só tem acesso às notas pendentes e do dia de hoje para economizar processamento.
                         
                         Responda ao pedido do usuário de forma clara:
                         "{pergunta_usuario}"
@@ -95,7 +94,7 @@ with st.sidebar:
                         st.markdown(f"> {resposta.text}")
                     
                 except Exception as e:
-                    st.error(f"❌ Erro na IA. Verifique se a sua Chave API está correta (ela deve começar com 'AIza'). Detalhe do erro: {e}")
+                    st.error(f"❌ Limite da API atingido ou Erro. Tente perguntar novamente em 1 minuto! Detalhe: {e}")
         else:
             st.warning("⚠️ Digite uma pergunta primeiro.")
 
@@ -221,8 +220,8 @@ with aba2:
             st.subheader("📋 Resumo do Turno (Copiar e Colar)")
             
             texto_relatorio = f"📊 *FECHAMENTO DE COLETAS - {hoje}*\n\n"
-            texto_relatorio += f"✅ *COLETAS FINALIZADAS HOJE:* {len(coletadas_hoje)} nota(s)\n"
             
+            texto_relatorio += f"✅ *COLETAS FINALIZADAS HOJE:* {len(coletadas_hoje)} nota(s)\n"
             if coletadas_hoje:
                 agrupado_coletadas = {}
                 for d in coletadas_hoje:

@@ -16,7 +16,8 @@ def conectar_planilha():
 
 st.title("🚚 Gestão de Coletas")
 
-aba1, aba2 = st.tabs(["📝 Lançar Nova Nota", "✅ Confirmar Coleta"])
+# Agora temos 3 abas!
+aba1, aba2, aba3 = st.tabs(["📝 Lançar Nova Nota", "✅ Confirmar Coleta", "📊 Painel de Pendências"])
 
 transportadoras = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
 
@@ -48,11 +49,10 @@ with aba1:
                     aba_sel.append_row(nova_linha)
                     st.success(f"✅ Nota {nota_nova} registrada na aba {transp_nova}!")
                     
-                    # --- LÓGICA DO AVISO (WHATSAPP E TEAMS) ---
+                    # LÓGICA DO WHATSAPP E TEAMS
                     if transp_nova == "FL":
                         st.info("💻 A transportadora FL foi selecionada. Lembre-se de enviar o aviso manualmente pelo **Microsoft Teams**!")
                     else:
-                        # Telefones oficiais atualizados
                         telefones = {
                             "JARBAS": "5522999445773",
                             "TRANSCHERRER": "5527992527567",
@@ -102,3 +102,59 @@ with aba2:
                     st.error(f"❌ A aba '{transp_baixa}' não foi encontrada.")
                 except Exception as e:
                     st.error(f"Erro ao atualizar: {e}")
+
+# --- TERCEIRA ABA: Painel de Visão Geral ---
+with aba3:
+    st.markdown("### 📊 Notas Aguardando Coleta")
+    st.markdown("Clique no botão abaixo para buscar as notas que ainda não têm data de coleta preenchida.")
+    
+    if st.button("🔄 Atualizar Painel", use_container_width=True):
+        with st.spinner("Buscando dados em tempo real na planilha..."):
+            try:
+                planilha = conectar_planilha()
+                
+                dados_pendentes = []
+                contagem_pendentes = {t: 0 for t in transportadoras}
+                
+                for transp in transportadoras:
+                    try:
+                        aba_sel = planilha.worksheet(transp)
+                        linhas = aba_sel.get_all_values()
+                        
+                        # Pula a linha de cabeçalho (começa do índice 1)
+                        for linha in linhas[1:]:
+                            # Verifica se a linha tem o número da nota preenchido
+                            if len(linha) >= 2 and str(linha[1]).strip() != "":
+                                # Condição: Se a coluna DT. COLETA (índice 3) não existe ou está vazia
+                                if len(linha) < 4 or str(linha[3]).strip() == "":
+                                    qtd_val = linha[0] if len(linha) > 0 else "-"
+                                    nota_val = linha[1]
+                                    data_val = linha[2] if len(linha) > 2 else "-"
+                                    
+                                    dados_pendentes.append({
+                                        "Transportadora": transp,
+                                        "Nota": nota_val,
+                                        "QTD": qtd_val,
+                                        "Data Solicitada": data_val
+                                    })
+                                    contagem_pendentes[transp] += 1
+                    except gspread.WorksheetNotFound:
+                        pass # Ignora se a aba da transportadora não existir
+                        
+                # Exibição dos resultados
+                if len(dados_pendentes) > 0:
+                    st.info(f"🚚 Encontramos **{len(dados_pendentes)}** notas aguardando coleta no momento.")
+                    
+                    # Cria a tabelinha de resumo
+                    resumo_exibicao = [{"Transportadora": k, "Notas Pendentes": v} for k, v in contagem_pendentes.items() if v > 0]
+                    
+                    st.write("**Resumo por Transportadora:**")
+                    st.dataframe(resumo_exibicao, use_container_width=True, hide_index=True)
+                        
+                    st.write("**Detalhamento (Todas as Notas):**")
+                    st.dataframe(dados_pendentes, use_container_width=True, hide_index=True)
+                else:
+                    st.success("🎉 Nenhuma nota pendente! Todas as coletas estão em dia na planilha.")
+                    
+            except Exception as e:
+                st.error(f"Erro ao carregar o painel: {e}")

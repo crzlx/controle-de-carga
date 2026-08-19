@@ -19,22 +19,22 @@ def disparar_email_silencioso(transportadora, nota, qtd):
         remetente = st.secrets["EMAIL_REMETENTE"]
         senha = st.secrets["SENHA_EMAIL"]
         
+        # A FL foi removida desta lista, pois usa o Teams!
         emails_destino = {
             "JARBAS": "adm.campos@italogrj.com.br",
             "TRANSCHERRER": "filial.campos@transcherrer.com.br, cidy.neves@transcherrer.com.br, filial.campos02@transcherrer.com.br",
-            "FL": "email_da_fl@teste.com",
             "GENEROSO": "email_do_generoso@teste.com"
         }
         
         destinatario = emails_destino.get(transportadora)
         
-        if destinatario and "teste.com" not in destinatario.lower() or transportadora == "TRANSCHERRER" or transportadora == "JARBAS":
+        # O código só dispara se tiver um e-mail válido configurado
+        if destinatario and "teste.com" not in destinatario.lower():
             msg = EmailMessage()
             msg['Subject'] = f"Nova Coleta Liberada - Speedmax (Nota: {nota})"
             msg['From'] = remetente
             msg['To'] = destinatario 
             
-            # O e-mail continua limpo, sem mostrar a Data de Emissão para fora!
             corpo_email = f"""
 Olá, equipe da {transportadora}!
 
@@ -85,9 +85,9 @@ def obter_dados_gerais():
                         "Transportadora": transp,
                         "QTD": l[0].strip() if len(l) > 0 else "-",
                         "Nota": str(l[1]).strip(),
-                        "Data_Solicitacao": l[2].strip() if len(l) > 2 else "-", # Dia que pediu a coleta
-                        "Data_Coleta": l[3].strip() if len(l) > 3 else "",       # Dia que o caminhão levou
-                        "Data_Emissao_Nota": l[4].strip() if len(l) > 4 else "-" # NOVA COLUNA: Dia da NFe
+                        "Data_Solicitacao": l[2].strip() if len(l) > 2 else "-",
+                        "Data_Coleta": l[3].strip() if len(l) > 3 else "",
+                        "Data_Emissao_Nota": l[4].strip() if len(l) > 4 else "-"
                     })
         except:
             pass
@@ -163,7 +163,6 @@ with aba1:
             data_solicitacao = st.date_input("Data da Solicitação", format="DD/MM/YYYY")
         with col2:
             nota_nova = st.text_input("Nota (Nº)")
-            # NOVO CAMPO: Emissão da NFe
             data_emissao = st.date_input("Data de Emissão da Nota", format="DD/MM/YYYY")
             
         enviar_nova = st.form_submit_button("Registrar Nota", use_container_width=True)
@@ -179,17 +178,20 @@ with aba1:
                     formatada_solicitacao = data_solicitacao.strftime("%d/%m/%Y")
                     formatada_emissao = data_emissao.strftime("%d/%m/%Y")
                     
-                    # Salva na ordem: QTD, NOTA, DATA_SOLICITACAO, DATA_COLETA (Vazio), DATA_EMISSAO_NOTA
                     aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao])
                     st.success(f"✅ Nota {nota_nova} registrada com sucesso na aba {transp_nova}!")
                     
-                    resultado_email = disparar_email_silencioso(transp_nova, nota_nova, qtd)
-                    if resultado_email is True:
-                        st.info(f"📧 E-mail enviado automaticamente para a equipe da {transp_nova}!")
-                    elif resultado_email is False:
-                        st.warning(f"⚠️ Nota registrada, mas o e-mail não foi enviado porque o endereço oficial da {transp_nova} ainda não foi configurado.")
+                    # LOGICA NOVA: Bloqueia e-mail para a FL e avisa sobre o Teams
+                    if transp_nova == "FL":
+                        st.info("💻 **ATENÇÃO:** O aviso para a transportadora FL deve ser enviado manualmente pelo **Microsoft Teams**!")
                     else:
-                        st.error(f"❌ Erro ao enviar o e-mail: {resultado_email}")
+                        resultado_email = disparar_email_silencioso(transp_nova, nota_nova, qtd)
+                        if resultado_email is True:
+                            st.info(f"📧 E-mail enviado automaticamente para a equipe da {transp_nova}!")
+                        elif resultado_email is False:
+                            st.warning(f"⚠️ Nota registrada, mas o e-mail não foi enviado porque o endereço oficial da {transp_nova} ainda não foi configurado.")
+                        else:
+                            st.error(f"❌ Erro ao enviar o e-mail: {resultado_email}")
                         
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")

@@ -98,7 +98,7 @@ def obter_dados_gerais():
 # ==========================================
 with st.sidebar:
     st.header("🤖 Alessandro IA")
-    st.markdown("Pergunte sobre as mercadorias ou peça para eu redigir avisos especiais.")
+    st.markdown("Estou aqui para te ajudar com a logística da filial Campos Dos Goytacazes.")
     
     pergunta_usuario = st.text_area("O que você precisa?", placeholder="Ex: Quantas notas o Jarbas tem pendente?")
     

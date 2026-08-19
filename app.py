@@ -182,7 +182,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.header("🤖 Alessandro IA")
-    st.markdown("Assistente Logístico Integrado.")
+    st.markdown("Eu sou o assistente IA da filial. Como posso te ajudar hoje?")
     
     # CORRIGIDO AQUI: text_area não aceita autocomplete="off"
     pergunta_usuario = st.text_area("O que você precisa hoje?")

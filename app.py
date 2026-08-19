@@ -4,6 +4,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import json
 import urllib.parse
 from datetime import datetime
+import google.generativeai as genai
 
 # Configuração da Página
 st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="centered")
@@ -15,7 +16,6 @@ def conectar_planilha():
     cliente = gspread.authorize(credenciais)
     return cliente.open_by_url("https://docs.google.com/spreadsheets/d/1yHThW-nbcwxCcNTnb66PP1YHbHpCE9_ep3DC33-OZs4/edit?usp=sharing")
 
-# Função que lê os dados de forma otimizada
 def obter_dados_gerais():
     planilha = conectar_planilha()
     dados = []
@@ -42,13 +42,13 @@ st.title("🚚 Gestão de Coletas")
 
 transportadoras = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
 
-# --- O SISTEMA AGORA TEM APENAS 3 ABAS ---
-aba1, aba2, aba3 = st.tabs([
-    "📦 Movimentação", "📊 Painel da Filial", "🔍 Consulta Rápida"
+# Adicionamos a 4ª Aba para a Inteligência Artificial
+aba1, aba2, aba3, aba4 = st.tabs([
+    "📦 Movimentação", "📊 Painel da Filial", "🔍 Consulta Rápida", "🤖 Assistente IA"
 ])
 
 # ==========================================
-# ABA 1: MOVIMENTAÇÃO (Lançar e Dar Baixa juntos)
+# ABA 1: MOVIMENTAÇÃO (Lançar e Baixar)
 # ==========================================
 with aba1:
     st.header("📝 Lançar Nova Solicitação")
@@ -56,7 +56,6 @@ with aba1:
     
     with st.form("form_nova", clear_on_submit=True):
         transp_nova = st.selectbox("Transportadora", transportadoras, key="t1")
-        
         col1, col2 = st.columns(2)
         with col1:
             qtd = st.number_input("QTD", min_value=1, step=1)
@@ -127,11 +126,10 @@ with aba1:
                     st.error(f"Erro: {e}")
 
 # ==========================================
-# ABA 2: PAINEL DA FILIAL (Tudo em um só clique)
+# ABA 2: PAINEL DA FILIAL
 # ==========================================
 with aba2:
     st.markdown("### 📊 Visão Geral do Estoque")
-    st.markdown("Acompanhe os números e gere o relatório gerencial com apenas um clique.")
     
     if st.button("🔄 Atualizar Painel e Gerar Relatório", use_container_width=True):
         with st.spinner("Analisando as planilhas..."):
@@ -142,14 +140,12 @@ with aba2:
             coletadas_hoje = [d for d in dados if d["Data_Coleta"] == hoje]
             pendentes_lista = [d for d in dados if d["Data_Coleta"] == ""]
             
-            # --- 1. INDICADORES DO DIA ---
             st.markdown("---")
             c1, c2, c3 = st.columns(3)
             c1.metric("📦 Separadas Hoje", len(lancadas_hoje))
             c2.metric("✅ Coletadas Hoje", len(coletadas_hoje))
             c3.metric("⏳ Paradas na Filial", len(pendentes_lista))
             
-            # --- 2. LISTA DE PENDÊNCIAS ---
             st.markdown("---")
             st.subheader("🚛 Mercadorias Aguardando Coleta")
             if pendentes_lista:
@@ -158,13 +154,12 @@ with aba2:
             else:
                 st.success("🎉 Nenhuma pendência! O estoque está 100% limpo.")
 
-            # --- 3. RELATÓRIO DE FECHAMENTO ---
             st.markdown("---")
             st.subheader("📋 Resumo do Turno (Copiar e Colar)")
             
             texto_relatorio = f"📊 *FECHAMENTO DE COLETAS - {hoje}*\n\n"
-            
             texto_relatorio += f"✅ *COLETAS FINALIZADAS HOJE:* {len(coletadas_hoje)} nota(s)\n"
+            
             if coletadas_hoje:
                 agrupado_coletadas = {}
                 for d in coletadas_hoje:
@@ -193,14 +188,13 @@ with aba2:
             else:
                 texto_relatorio += "Nenhuma pendência! Galpão limpo. 🎉\n"
             
-            st.text_area("Texto Copiável (Para enviar no WhatsApp/Teams):", value=texto_relatorio, height=350)
+            st.text_area("Texto Copiável:", value=texto_relatorio, height=350)
 
 # ==========================================
 # ABA 3: CONSULTA RÁPIDA
 # ==========================================
 with aba3:
     st.markdown("### 🔍 Pesquisa de Status")
-    st.markdown("Procure pelo número da nota para tirar dúvidas rapidamente.")
     nota_busca = st.text_input("Digite o Número da Nota:")
     
     if st.button("Procurar Nota", use_container_width=True):
@@ -227,3 +221,48 @@ with aba3:
                         """, unsafe_allow_html=True)
                 else:
                     st.error("❌ Esta nota não foi encontrada em nenhuma das planilhas.")
+
+# ==========================================
+# ABA 4: ASSISTENTE IA (NOVIDADE)
+# ==========================================
+with aba4:
+    st.markdown("### 🤖 Assistente Logístico (IA)")
+    st.markdown("Faça perguntas sobre as mercadorias, volumes parados, ou peça para a IA redigir e-mails para as transportadoras.")
+    
+    pergunta_usuario = st.text_area("O que você deseja saber ou fazer?", placeholder="Ex: Quantas notas o Jarbas tem pendente? ou Crie uma mensagem cobrando a FL sobre as notas atrasadas.")
+    
+    if st.button("Perguntar à IA", use_container_width=True):
+        if pergunta_usuario:
+            with st.spinner("A IA está processando as planilhas..."):
+                try:
+                    # Configura a chave do Gemini que você salvou
+                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                    modelo = genai.GenerativeModel('gemini-1.5-flash')
+                    
+                    # Pega os dados atuais do estoque para a IA "ler"
+                    dados_estoque = obter_dados_gerais()
+                    hoje = datetime.now().strftime("%d/%m/%Y")
+                    
+                    # Cria a instrução de fundo para a IA
+                    prompt = f"""
+                    Você é um assistente logístico altamente eficiente que ajuda o administrador de um galpão.
+                    Hoje é dia {hoje}. Seja direto, polido e profissional.
+                    Aqui estão os dados em tempo real das planilhas de coleta (notas lançadas, pendentes, transportadoras):
+                    {json.dumps(dados_estoque, ensure_ascii=False)}
+                    
+                    Use EXCLUSIVAMENTE esses dados para responder. Se a resposta não estiver nos dados, avise.
+                    
+                    Responda ao pedido do usuário de forma clara:
+                    "{pergunta_usuario}"
+                    """
+                    
+                    # Envia para o Gemini e pega a resposta
+                    resposta = modelo.generate_content(prompt)
+                    
+                    st.success("Resposta gerada!")
+                    st.markdown(f"> {resposta.text}")
+                    
+                except Exception as e:
+                    st.error(f"Erro ao conectar com a Inteligência Artificial: Verifique se a chave API está correta nos Secrets. Detalhe técnico: {e}")
+        else:
+            st.warning("⚠️ Digite uma pergunta na caixa de texto antes de enviar.")

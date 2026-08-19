@@ -39,7 +39,7 @@ def obter_dados_gerais():
     return dados
 
 # ==========================================
-# MENU LATERAL (SIDEBAR) - ASSISTENTE IA
+# MENU LATERAL (SIDEBAR) - ALESSANDRO IA
 # ==========================================
 with st.sidebar:
     st.header("🤖 Alessandro IA")
@@ -47,9 +47,9 @@ with st.sidebar:
     
     pergunta_usuario = st.text_area("O que você precisa?", placeholder="Ex: Quantas notas o Jarbas tem pendente?")
     
-    if st.button("Perguntar à IA", use_container_width=True):
+    if st.button("Perguntar ao Alessandro", use_container_width=True):
         if pergunta_usuario:
-            with st.spinner("Analisando o estoque..."):
+            with st.spinner("O Alessandro está analisando o estoque..."):
                 try:
                     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                     
@@ -62,9 +62,12 @@ with st.sidebar:
                     # FILTRO DE SEGURANÇA: Lê apenas dados que importam hoje para não estourar limite
                     dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Emissao"] == hoje]
                     
+                    # CÉREBRO DA IA: Aqui nós batizamos ele oficialmente
                     prompt = f"""
+                    O seu nome é Alessandro IA.
                     Você é um assistente logístico altamente eficiente que ajuda o administrador de um galpão.
-                    Hoje é dia {hoje}. Seja direto, polido e profissional.
+                    Hoje é dia {hoje}. Seja direto, polido e profissional. Pode se apresentar ou agir de acordo com o seu nome quando for pertinente.
+                    
                     Aqui estão os dados resumidos das notas pendentes na filial e das operações de hoje:
                     {json.dumps(dados_filtrados, ensure_ascii=False)}
                     
@@ -75,11 +78,11 @@ with st.sidebar:
                     """
                     
                     resposta = modelo.generate_content(prompt)
-                    st.success("✅ Resposta pronta!")
+                    st.success("✅ Resposta do Alessandro:")
                     st.markdown(f"> {resposta.text}")
                     
                 except Exception as e:
-                    st.error(f"❌ Erro na IA. Detalhe: {e}")
+                    st.error(f"❌ Erro na conexão do Alessandro. Detalhe: {e}")
         else:
             st.warning("⚠️ Digite uma pergunta primeiro.")
 

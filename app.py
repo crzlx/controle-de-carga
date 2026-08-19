@@ -160,28 +160,28 @@ def obter_dados_gerais():
     return dados
 
 # ==========================================
-# 🤖 CHATBOT FLUTUANTE (MODAL CENTRAL)
+# 🤖 CHATBOT FLUTUANTE (MODAL CENTRAL) - CORRIGIDO
 # ==========================================
 @st.dialog("🤖 Chat com Alessandro IA")
 def abrir_chat_ia():
-    # Área do histórico de mensagens
-    box_mensagens = st.container(height=350)
-    with box_mensagens:
-        for msg in st.session_state.chat_history:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-    
-    # Campo de digitação
-    with st.form("chat_form", clear_on_submit=True):
-        col_in, col_btn = st.columns([4, 1])
-        with col_in:
-            nova_msg = st.text_input("Mensagem", label_visibility="collapsed", placeholder="O que você precisa?", autocomplete="off")
-        with col_btn:
-            submit_chat = st.form_submit_button("➤", use_container_width=True)
+    # 1. Desenha todo o histórico de conversas primeiro
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
             
-        if submit_chat and nova_msg:
-            st.session_state.chat_history.append({"role": "user", "content": nova_msg})
-            with st.spinner("Analisando..."):
+    # 2. Caixa de input nativa de Chat do Streamlit
+    if nova_msg := st.chat_input("O que você precisa saber sobre a expedição?"):
+        
+        # Mostra a mensagem do usuário na tela IMEDIATAMENTE
+        with st.chat_message("user"):
+            st.markdown(nova_msg)
+            
+        # Salva a mensagem do usuário no histórico real
+        st.session_state.chat_history.append({"role": "user", "content": nova_msg})
+        
+        # Balão do assistente processando a resposta
+        with st.chat_message("assistant"):
+            with st.spinner("Analisando as planilhas do galpão..."):
                 try:
                     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                     modelo = genai.GenerativeModel('gemini-3.6-flash')
@@ -189,19 +189,28 @@ def abrir_chat_ia():
                     hoje = datetime.now().strftime("%d/%m/%Y")
                     dados_filtrados = [d for d in dados_estoque if d["Data_Coleta"] == "" or d["Data_Coleta"] == hoje or d["Data_Solicitacao"] == hoje]
                     
-                    historico = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-5:]])
+                    historico = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-4:]])
                     
                     prompt = f"""
-                    O seu nome é Alessandro IA. Você é um assistente logístico. Hoje é {hoje}. 
-                    DADOS: {json.dumps(dados_filtrados, ensure_ascii=False)}
-                    HISTÓRICO RECENTE: {historico}
-                    Responda à pergunta: "{nova_msg}"
+                    O seu nome é Alessandro IA. Você é um assistente logístico super inteligente que ajuda na expedição. 
+                    Hoje é {hoje}. 
+                    DADOS ATUAIS DA FILIAL: {json.dumps(dados_filtrados, ensure_ascii=False)}
+                    HISTÓRICO RECENTE DO CHAT: {historico}
+                    
+                    Responda de forma direta e profissional à pergunta: "{nova_msg}"
                     """
                     resposta = modelo.generate_content(prompt)
+                    
+                    # Mostra a resposta da IA na tela
+                    st.markdown(resposta.text)
+                    
+                    # Salva a resposta da IA no histórico
                     st.session_state.chat_history.append({"role": "assistant", "content": resposta.text})
-                    st.rerun()
+                    
                 except Exception as e:
-                    st.error(f"Erro: {e}")
+                    erro_msg = f"❌ Ocorreu um erro ao consultar: {e}"
+                    st.error(erro_msg)
+                    st.session_state.chat_history.append({"role": "assistant", "content": erro_msg})
 
 # ==========================================
 # SIDEBAR - MENU DE USUÁRIO E BOTÃO DO CHAT

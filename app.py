@@ -19,11 +19,11 @@ def disparar_email_silencioso(transportadora, nota, qtd):
         remetente = st.secrets["EMAIL_REMETENTE"]
         senha = st.secrets["SENHA_EMAIL"]
         
-        # A FL foi removida desta lista, pois usa o Teams!
+        # LISTA OFICIAL DE E-MAILS (FL removida, pois usa o Teams)
         emails_destino = {
             "JARBAS": "adm.campos@italogrj.com.br",
             "TRANSCHERRER": "filial.campos@transcherrer.com.br, cidy.neves@transcherrer.com.br, filial.campos02@transcherrer.com.br",
-            "GENEROSO": "email_do_generoso@teste.com"
+            "GENEROSO": "Encarregado.cgo@generoso.com.br"
         }
         
         destinatario = emails_destino.get(transportadora)

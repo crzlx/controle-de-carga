@@ -225,7 +225,7 @@ with aba6:
             else:
                 texto_relatorio += "Nenhuma transportadora realizou coleta hoje.\n"
                 
-            texto_relatorio += f"\n⏳ *Ficam pendentes na doca:* {pendentes_total} notas no total.\n"
+            texto_relatorio += f"\n⏳ *Ficam pendentes na filial:* {pendentes_total} notas no total.\n"
             
             st.success("Relatório gerado! Clique dentro da caixa abaixo, copie e cole no WhatsApp/Teams.")
             st.text_area("Texto Copiável:", value=texto_relatorio, height=250)

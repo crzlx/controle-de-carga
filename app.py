@@ -151,16 +151,11 @@ opcoes_abas = [
     "📦 Movimentação", "📊 Painel & Relatórios", "🔍 Consulta Rápida", "⚙️ Editar/Excluir", "🔔 Cobrar Atrasos"
 ]
 
-aba_selecionada = st.radio("Navegação:", opcoes_abas, horizontal=True, label_visibility="collapsed")
-
-if "aba_atual" not in st.session_state:
-    st.session_state["aba_atual"] = aba_selecionada
-
-if st.session_state["aba_atual"] != aba_selecionada:
-    st.session_state["aba_atual"] = aba_selecionada
+def limpar_memoria_aba():
     if 'nota_gerenciar' in st.session_state:
         del st.session_state['nota_gerenciar']
-    st.rerun()
+
+aba_selecionada = st.radio("Navegação:", opcoes_abas, horizontal=True, label_visibility="collapsed", on_change=limpar_memoria_aba)
 
 st.markdown("---")
 
@@ -255,7 +250,8 @@ if aba_selecionada == "📦 Movimentação":
                             st.success("✅ Baixa confirmada perfeitamente!")
                             
                             obter_dados_gerais.clear()
-                            st.rerun()
+                            try: st.rerun()
+                            except: st.experimental_rerun()
                         except Exception as e: st.error(f"Erro na sincronização: {e}")
     else: st.success(f"🎉 Expedição limpa para a {transp_baixa}.")
 
@@ -412,7 +408,8 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
                             del st.session_state['nota_gerenciar']
                             
                             obter_dados_gerais.clear()
-                            st.rerun()
+                            try: st.rerun()
+                            except: st.experimental_rerun()
                         except Exception as e:
                             st.error(f"Erro ao atualizar: {e}")
         
@@ -428,7 +425,8 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
                 del st.session_state['nota_gerenciar']
                 
                 obter_dados_gerais.clear()
-                st.rerun()
+                try: st.rerun()
+                except: st.experimental_rerun()
             except Exception as e: st.error(f"Erro ao excluir: {e}")
 
 elif aba_selecionada == "🔔 Cobrar Atrasos":

@@ -81,6 +81,8 @@ def parse_data(data_str):
     try: return datetime.strptime(data_str, "%d/%m/%Y").date()
     except: return None
 
+# 🚀 SISTEMA DE CACHE: Evita o erro 429 de leitura do Google Sheets
+@st.cache_data(ttl=60, show_spinner=False)
 def obter_dados_gerais():
     planilha = conectar_planilha()
     dados = []
@@ -98,7 +100,6 @@ def obter_dados_gerais():
         except: pass
     return dados
 
-# 🚀 OTIMIZAÇÃO: PUXAR DADOS DA PLANILHA APENAS UMA VEZ
 try:
     dados_globais = obter_dados_gerais()
 except Exception as e:
@@ -171,10 +172,8 @@ opcoes_abas = [
     "📦 Movimentação", "📊 Painel & Relatórios", "🔍 Consulta Rápida", "⚙️ Editar/Excluir", "🔔 Cobrar Atrasos"
 ]
 
-# Troca do st.tabs visual por um Menu Radio Horizontal que força o reset na troca
 aba_selecionada = st.radio("Navegação:", opcoes_abas, horizontal=True, label_visibility="collapsed")
 
-# Lógica que detecta a troca de tela e limpa a memória com precisão
 if "aba_atual" not in st.session_state:
     st.session_state["aba_atual"] = aba_selecionada
 
@@ -215,6 +214,9 @@ if aba_selecionada == "📦 Movimentação":
                     formatada_emissao = data_emissao.strftime("%d/%m/%Y")
                     aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao, usuario_atual, prioridade])
                     st.success(f"✅ Nota {nota_nova} registrada!")
+                    
+                    obter_dados_gerais.clear() # Limpa a memória para reconhecer a nova nota
+                    
                     if transp_nova == "FL": st.info("💻 **ATENÇÃO:** O aviso para a FL deve ser enviado via Teams!")
                     else:
                         resultado_email = disparar_email_silencioso(transp_nova, nota_nova, qtd, prioridade=prioridade)
@@ -254,6 +256,8 @@ if aba_selecionada == "📦 Movimentação":
                                 aba_sel.update_cell(celula.row, 4, coleta_formatada)
                                 aba_sel.update_cell(celula.row, 8, usuario_atual)
                             st.success("✅ Baixa confirmada perfeitamente!")
+                            
+                            obter_dados_gerais.clear() # Limpa a memória para reconhecer a baixa
                             try: st.rerun()
                             except: st.experimental_rerun()
                         except Exception as e: st.error(f"Erro na sincronização: {e}")
@@ -419,6 +423,8 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
 
                             st.success("✅ Atualizado na planilha com sucesso! (Nenhum aviso externo foi disparado).")
                             del st.session_state['nota_gerenciar']
+                            
+                            obter_dados_gerais.clear() # Limpa a memória para reconhecer a edição
                             try: st.rerun()
                             except: st.experimental_rerun()
                         except Exception as e:
@@ -434,6 +440,8 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
                 aba.delete_rows(cel.row)
                 st.success("✅ Apagado com sucesso!")
                 del st.session_state['nota_gerenciar']
+                
+                obter_dados_gerais.clear() # Limpa a memória para apagar a nota do cache
                 try: st.rerun()
                 except: st.experimental_rerun()
             except Exception as e: st.error(f"Erro ao excluir: {e}")

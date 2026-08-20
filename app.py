@@ -98,11 +98,18 @@ def obter_dados_gerais():
         except: pass
     return dados
 
+# 🚀 OTIMIZAÇÃO: PUXAR DADOS DA PLANILHA APENAS UMA VEZ
+try:
+    dados_globais = obter_dados_gerais()
+except Exception as e:
+    st.error(f"Erro ao conectar com o Google Sheets: {e}")
+    dados_globais = []
+
 # ==========================================
 # 🤖 CHATBOT OTIMIZADO
 # ==========================================
 @st.dialog("🤖 Chat com Alessandro IA")
-def abrir_chat_ia():
+def abrir_chat_ia(dados_para_ia):
     box_chat = st.container(height=400)
     with box_chat:
         for msg in st.session_state.chat_history:
@@ -118,13 +125,10 @@ def abrir_chat_ia():
                 with st.spinner("Analisando..."):
                     try:
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                        
                         modelo = genai.GenerativeModel('gemini-3.6-flash')
                         
-                        dados_estoque = obter_dados_gerais()
                         hoje = datetime.now().strftime("%d/%m/%Y")
-                        
-                        pendentes = [d for d in dados_estoque if d["Data_Coleta"] == ""]
+                        pendentes = [d for d in dados_para_ia if d["Data_Coleta"] == ""]
                         historico = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-4:]])
                         
                         prompt = f"""
@@ -156,14 +160,13 @@ with st.sidebar:
     usuario_atual = st.selectbox("Identificação:", ["Pedro", "Alessandro", "Outro"])
     st.markdown("---")
     if st.button("💬 Falar com Alessandro IA", use_container_width=True):
-        abrir_chat_ia()
+        abrir_chat_ia(dados_globais)
 
 # ==========================================
 # CORPO PRINCIPAL DAS ABAS
 # ==========================================
 st.title("🚚 Expedição Campos Dos Goytacazes")
 
-# NOVO: Adicionado a 5ª Aba para Cobranças separada do Gerenciamento
 aba1, aba2, aba3, aba4, aba5 = st.tabs([
     "📦 Movimentação", "📊 Painel & Relatórios", "🔍 Consulta Rápida", "⚙️ Editar/Excluir", "🔔 Cobrar Atrasos"
 ])
@@ -207,8 +210,9 @@ with aba1:
     st.markdown("---")
     st.header("✅ Confirmar Coleta em Lote")
     transp_baixa = st.selectbox("Transportadora (Baixa)", TRANSPORTADORAS, key="t2")
-    dados_totais = obter_dados_gerais()
-    pendentes_transp = [d for d in dados_totais if d["Transportadora"] == transp_baixa and d["Data_Coleta"] == ""]
+    
+    # Usando os dados globais puxados apenas uma vez
+    pendentes_transp = [d for d in dados_globais if d["Transportadora"] == transp_baixa and d["Data_Coleta"] == ""]
     
     if pendentes_transp:
         with st.form("form_baixa"):
@@ -255,12 +259,12 @@ with aba2:
         if not filtro_inicio or not filtro_fim: st.warning("⚠️ Selecione as datas Inicial e Final.")
         else:
             with st.spinner("Processando..."):
-                dados = obter_dados_gerais()
                 hoje_dt = datetime.now()
                 lancadas_periodo, coletadas_periodo, pendentes_gerais = [], [], []
                 tempos_coleta = {t: [] for t in TRANSPORTADORAS}
                 
-                for d in dados:
+                # Usando os dados globais
+                for d in dados_globais:
                     dt_sol = parse_data(d["Data_Solicitacao"])
                     dt_col = parse_data(d["Data_Coleta"])
                     if dt_sol and filtro_inicio <= dt_sol <= filtro_fim: lancadas_periodo.append(d)
@@ -328,7 +332,7 @@ with aba2:
                 output = io.StringIO()
                 writer = csv.DictWriter(output, fieldnames=["Transportadora", "QTD", "Nota", "Data_Solicitacao", "Data_Coleta", "Data_Emissao_Nota", "Usuario_Lancamento", "Prioridade", "Usuario_Baixa"])
                 writer.writeheader()
-                writer.writerows(dados)
+                writer.writerows(dados_globais)
                 st.download_button("📥 Baixar Histórico em CSV", data=output.getvalue().encode('utf-8'), file_name=f"relatorio.csv", mime="text/csv", use_container_width=True)
 
 # ==========================================
@@ -340,8 +344,8 @@ with aba3:
     if st.button("Procurar Nota", use_container_width=True):
         if nota_busca:
             with st.spinner("Buscando rastros..."):
-                dados = obter_dados_gerais()
-                encontradas = [d for d in dados if d["Nota"] == nota_busca.strip()]
+                # Usando os dados globais
+                encontradas = [d for d in dados_globais if d["Nota"] == nota_busca.strip()]
                 if encontradas:
                     for nota in encontradas:
                         status = "✅ Já Coletada" if nota["Data_Coleta"] != "" else "⏳ Aguardando"
@@ -365,8 +369,8 @@ with aba4:
     nota_alvo = st.text_input("Digite a Nota Fiscal que deseja remover:", autocomplete="off")
     if st.button("Buscar Registro", use_container_width=True):
         if nota_alvo:
-            dados = obter_dados_gerais()
-            encontradas = [d for d in dados if d["Nota"] == nota_alvo.strip()]
+            # Usando os dados globais
+            encontradas = [d for d in dados_globais if d["Nota"] == nota_alvo.strip()]
             if encontradas: st.session_state['nota_gerenciar'] = encontradas[0]
             else:
                 st.error("❌ Nota não encontrada.")
@@ -389,18 +393,17 @@ with aba4:
             except Exception as e: st.error(f"Erro ao excluir: {e}")
 
 # ==========================================
-# ABA 5: COBRAR ATRASOS (NOVO)
+# ABA 5: COBRAR ATRASOS
 # ==========================================
 with aba5:
     st.markdown("### 🔔 Disparar Cobrança (Notas Atrasadas)")
     st.markdown("Lista automática de notas aguardando coleta há **1 dia ou mais** na filial.")
     
-    dados_totais = obter_dados_gerais()
     hoje_dt = datetime.now()
     
-    # Filtra as notas com mais de 1 dia de atraso
+    # Filtra as notas usando os dados globais
     atrasadas = []
-    for d in dados_totais:
+    for d in dados_globais:
         if d["Data_Coleta"] == "":
             try:
                 dias_parado = (hoje_dt - datetime.strptime(d["Data_Solicitacao"], "%d/%m/%Y")).days
@@ -413,7 +416,6 @@ with aba5:
     if atrasadas:
         with st.form("form_cobranca"):
             checkboxes_cobranca = {}
-            # Ordena as notas por transportadora para facilitar a leitura visual
             for p in sorted(atrasadas, key=lambda x: x["Transportadora"]):
                 prefixo_urg = "🚨 " if "URGENTE" in p['Prioridade'] else ""
                 label = f"[{p['Transportadora']}] {prefixo_urg}Nota: {p['Nota']} — {p['QTD']} vol ({p['Dias_Atraso']} dias aguardando)"

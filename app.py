@@ -3,6 +3,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 from datetime import datetime
+import time
 import google.generativeai as genai
 import smtplib
 from email.message import EmailMessage
@@ -10,9 +11,6 @@ import csv
 import io
 import pandas as pd
 
-# ==========================================
-# CONFIGURAÇÃO GERAL E ESTADOS
-# ==========================================
 st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="wide")
 
 TRANSPORTADORAS = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
@@ -22,9 +20,6 @@ if "chat_history" not in st.session_state:
         {"role": "assistant", "content": "Olá! Sou o Alessandro IA. Como posso ajudar com a expedição, dúvidas com clientes ou rotina do galpão hoje?"}
     ]
 
-# ==========================================
-# 🎨 CSS SEGURO
-# ==========================================
 css_seguro = """
 <style>
 @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -37,9 +32,6 @@ div[data-testid="stMetric"]:hover { background-color: rgba(128,128,128,0.05) !im
 """
 st.markdown(css_seguro, unsafe_allow_html=True)
 
-# ==========================================
-# LÓGICA DE E-MAILS OTIMIZADA
-# ==========================================
 def disparar_email_silencioso(transportadora, nota, qtd, lembrete=False, prioridade="Normal"):
     try:
         remetente = st.secrets["EMAIL_REMETENTE"]
@@ -67,9 +59,6 @@ def disparar_email_silencioso(transportadora, nota, qtd, lembrete=False, priorid
     except Exception:
         return False
 
-# ==========================================
-# ACESSO AO BANCO DE DADOS
-# ==========================================
 def conectar_planilha():
     escopo = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     cred_dict = json.loads(st.secrets["google_credentials"])
@@ -81,7 +70,6 @@ def parse_data(data_str):
     try: return datetime.strptime(data_str, "%d/%m/%Y").date()
     except: return None
 
-# 🚀 SISTEMA DE CACHE: Evita o erro 429 de leitura do Google Sheets
 @st.cache_data(ttl=60, show_spinner=False)
 def obter_dados_gerais():
     planilha = conectar_planilha()
@@ -106,9 +94,6 @@ except Exception as e:
     st.error(f"Erro ao conectar com o Google Sheets: {e}")
     dados_globais = []
 
-# ==========================================
-# 🤖 CHATBOT
-# ==========================================
 @st.dialog("🤖 Chat com Alessandro IA")
 def abrir_chat_ia(dados_para_ia):
     box_chat = st.container(height=400)
@@ -153,9 +138,6 @@ def abrir_chat_ia(dados_para_ia):
                         st.error(erro_msg)
                         st.session_state.chat_history.append({"role": "assistant", "content": erro_msg})
 
-# ==========================================
-# SIDEBAR
-# ==========================================
 with st.sidebar:
     st.header("👤 Operador")
     usuario_atual = st.selectbox("Identificação:", ["Pedro", "Alessandro", "Outro"])
@@ -163,9 +145,6 @@ with st.sidebar:
     if st.button("💬 Falar com Alessandro IA", use_container_width=True):
         abrir_chat_ia(dados_globais)
 
-# ==========================================
-# CORPO PRINCIPAL - MENU DE NAVEGAÇÃO COM RESET
-# ==========================================
 st.title("🚚 Expedição Campos Dos Goytacazes")
 
 opcoes_abas = [
@@ -185,9 +164,20 @@ if st.session_state["aba_atual"] != aba_selecionada:
 
 st.markdown("---")
 
-# ==========================================
-# ABA 1: MOVIMENTAÇÃO
-# ==========================================
+id_animacao = int(time.time() * 1000)
+st.markdown(f"""
+<div id="marcador-{id_animacao}"></div>
+<style>
+@keyframes slideInAba_{id_animacao} {{
+    from {{ opacity: 0; transform: translateY(15px); }}
+    to {{ opacity: 1; transform: translateY(0); }}
+}}
+div.element-container:has(#marcador-{id_animacao}) ~ div.element-container {{
+    animation: slideInAba_{id_animacao} 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}}
+</style>
+""", unsafe_allow_html=True)
+
 if aba_selecionada == "📦 Movimentação":
     st.header("📝 Lançar Nova Solicitação")
     st.markdown(f"Lançamento registrado por: **{usuario_atual}**.")
@@ -215,7 +205,7 @@ if aba_selecionada == "📦 Movimentação":
                     aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao, usuario_atual, prioridade])
                     st.success(f"✅ Nota {nota_nova} registrada!")
                     
-                    obter_dados_gerais.clear() # Limpa a memória para reconhecer a nova nota
+                    obter_dados_gerais.clear()
                     
                     if transp_nova == "FL": st.info("💻 **ATENÇÃO:** O aviso para a FL deve ser enviado via Teams!")
                     else:
@@ -257,15 +247,12 @@ if aba_selecionada == "📦 Movimentação":
                                 aba_sel.update_cell(celula.row, 8, usuario_atual)
                             st.success("✅ Baixa confirmada perfeitamente!")
                             
-                            obter_dados_gerais.clear() # Limpa a memória para reconhecer a baixa
+                            obter_dados_gerais.clear()
                             try: st.rerun()
                             except: st.experimental_rerun()
                         except Exception as e: st.error(f"Erro na sincronização: {e}")
     else: st.success(f"🎉 Doca limpa para a {transp_baixa}.")
 
-# ==========================================
-# ABA 2: PAINEL DA FILIAL
-# ==========================================
 elif aba_selecionada == "📊 Painel & Relatórios":
     st.markdown("### 📊 Dashboard Analítico")
     with st.expander("📅 Filtrar Dados por Período", expanded=True):
@@ -352,9 +339,6 @@ elif aba_selecionada == "📊 Painel & Relatórios":
                 writer.writerows(dados_globais)
                 st.download_button("📥 Baixar Histórico em CSV", data=output.getvalue().encode('utf-8'), file_name=f"relatorio.csv", mime="text/csv", use_container_width=True)
 
-# ==========================================
-# ABA 3: CONSULTA RÁPIDA
-# ==========================================
 elif aba_selecionada == "🔍 Consulta Rápida":
     st.markdown("### 🔍 Pesquisa & Rastreabilidade")
     nota_busca = st.text_input("Digite o Número da Nota:", autocomplete="off")
@@ -377,9 +361,6 @@ elif aba_selecionada == "🔍 Consulta Rápida":
                         """, unsafe_allow_html=True)
                 else: st.error("❌ Nota não encontrada.")
 
-# ==========================================
-# ABA 4: EDITAR E EXCLUIR
-# ==========================================
 elif aba_selecionada == "⚙️ Editar/Excluir":
     st.markdown("### ⚙️ Localizar, Editar ou Excluir Registro")
     nota_alvo = st.text_input("Digite a Nota Fiscal para gerenciar:", autocomplete="off")
@@ -424,7 +405,7 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
                             st.success("✅ Atualizado na planilha com sucesso! (Nenhum aviso externo foi disparado).")
                             del st.session_state['nota_gerenciar']
                             
-                            obter_dados_gerais.clear() # Limpa a memória para reconhecer a edição
+                            obter_dados_gerais.clear()
                             try: st.rerun()
                             except: st.experimental_rerun()
                         except Exception as e:
@@ -441,14 +422,11 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
                 st.success("✅ Apagado com sucesso!")
                 del st.session_state['nota_gerenciar']
                 
-                obter_dados_gerais.clear() # Limpa a memória para apagar a nota do cache
+                obter_dados_gerais.clear()
                 try: st.rerun()
                 except: st.experimental_rerun()
             except Exception as e: st.error(f"Erro ao excluir: {e}")
 
-# ==========================================
-# ABA 5: COBRAR ATRASOS
-# ==========================================
 elif aba_selecionada == "🔔 Cobrar Atrasos":
     st.markdown("### 🔔 Disparar Cobrança (Notas Atrasadas)")
     st.markdown("Lista automática de notas aguardando coleta há **1 dia ou mais** na filial.")

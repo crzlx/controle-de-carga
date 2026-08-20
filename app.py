@@ -250,8 +250,7 @@ if aba_selecionada == "📦 Movimentação":
                             st.success("✅ Baixa confirmada perfeitamente!")
                             
                             obter_dados_gerais.clear()
-                            try: st.rerun()
-                            except: st.experimental_rerun()
+                            st.rerun()
                         except Exception as e: st.error(f"Erro na sincronização: {e}")
     else: st.success(f"🎉 Expedição limpa para a {transp_baixa}.")
 
@@ -408,8 +407,7 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
                             del st.session_state['nota_gerenciar']
                             
                             obter_dados_gerais.clear()
-                            try: st.rerun()
-                            except: st.experimental_rerun()
+                            st.rerun()
                         except Exception as e:
                             st.error(f"Erro ao atualizar: {e}")
         
@@ -425,8 +423,7 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
                 del st.session_state['nota_gerenciar']
                 
                 obter_dados_gerais.clear()
-                try: st.rerun()
-                except: st.experimental_rerun()
+                st.rerun()
             except Exception as e: st.error(f"Erro ao excluir: {e}")
 
 elif aba_selecionada == "🔔 Cobrar Atrasos":

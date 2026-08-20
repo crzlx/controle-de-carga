@@ -99,7 +99,7 @@ def obter_dados_gerais():
     return dados
 
 # ==========================================
-# 🤖 CHATBOT OTIMIZADO PARA PLANO GRATUITO
+# 🤖 CHATBOT OTIMIZADO
 # ==========================================
 @st.dialog("🤖 Chat com Alessandro IA")
 def abrir_chat_ia():
@@ -119,14 +119,12 @@ def abrir_chat_ia():
                     try:
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                         
-                        # ALTERAÇÃO EXATA: Voltando ao modelo 3.6-flash que funciona no seu projeto
                         modelo = genai.GenerativeModel('gemini-3.6-flash')
                         
                         dados_estoque = obter_dados_gerais()
                         hoje = datetime.now().strftime("%d/%m/%Y")
                         
                         pendentes = [d for d in dados_estoque if d["Data_Coleta"] == ""]
-                        
                         historico = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-4:]])
                         
                         prompt = f"""
@@ -165,8 +163,9 @@ with st.sidebar:
 # ==========================================
 st.title("🚚 Expedição Campos Dos Goytacazes")
 
-aba1, aba2, aba3, aba4 = st.tabs([
-    "📦 Movimentação", "📊 Painel & Relatórios", "🔍 Consulta Rápida", "⚙️ Gerenciar & Cobrar"
+# NOVO: Adicionado a 5ª Aba para Cobranças separada do Gerenciamento
+aba1, aba2, aba3, aba4, aba5 = st.tabs([
+    "📦 Movimentação", "📊 Painel & Relatórios", "🔍 Consulta Rápida", "⚙️ Editar/Excluir", "🔔 Cobrar Atrasos"
 ])
 
 # ==========================================
@@ -359,11 +358,11 @@ with aba3:
                 else: st.error("❌ Nota não encontrada.")
 
 # ==========================================
-# ABA 4: GERENCIAR E COBRAR
+# ABA 4: GERENCIAR (EXCLUIR)
 # ==========================================
 with aba4:
-    st.markdown("### ⚙️ Corrigir, Excluir ou Re-cobrar")
-    nota_alvo = st.text_input("Digite a Nota Fiscal para gerenciar:", autocomplete="off")
+    st.markdown("### ⚙️ Localizar e Excluir Registro")
+    nota_alvo = st.text_input("Digite a Nota Fiscal que deseja remover:", autocomplete="off")
     if st.button("Buscar Registro", use_container_width=True):
         if nota_alvo:
             dados = obter_dados_gerais()
@@ -375,24 +374,79 @@ with aba4:
                         
     if 'nota_gerenciar' in st.session_state:
         n = st.session_state['nota_gerenciar']
-        st.info(f"Gerenciando Nota: **{n['Nota']}** ({n['Transportadora']})")
-        c_btn1, c_btn2 = st.columns(2)
-        with c_btn1:
-            if st.button("🔔 Enviar Lembrete", use_container_width=True):
-                if n["Transportadora"] == "FL": st.warning("⚠️ Cobre a FL via Teams!")
+        st.info(f"Registro Encontrado: **{n['Nota']}** ({n['Transportadora']}) - {n['QTD']} volumes")
+        
+        if st.button("🗑️ Excluir Registro Definitivamente", type="primary", use_container_width=True):
+            try:
+                planilha = conectar_planilha()
+                aba = planilha.worksheet(n["Transportadora"])
+                cel = aba.find(n["Nota"])
+                aba.delete_rows(cel.row)
+                st.success("✅ Apagado com sucesso!")
+                del st.session_state['nota_gerenciar']
+                try: st.rerun()
+                except: st.experimental_rerun()
+            except Exception as e: st.error(f"Erro ao excluir: {e}")
+
+# ==========================================
+# ABA 5: COBRAR ATRASOS (NOVO)
+# ==========================================
+with aba5:
+    st.markdown("### 🔔 Disparar Cobrança (Notas Atrasadas)")
+    st.markdown("Lista automática de notas aguardando coleta há **1 dia ou mais** na filial.")
+    
+    dados_totais = obter_dados_gerais()
+    hoje_dt = datetime.now()
+    
+    # Filtra as notas com mais de 1 dia de atraso
+    atrasadas = []
+    for d in dados_totais:
+        if d["Data_Coleta"] == "":
+            try:
+                dias_parado = (hoje_dt - datetime.strptime(d["Data_Solicitacao"], "%d/%m/%Y")).days
+                if dias_parado >= 1:
+                    d["Dias_Atraso"] = dias_parado
+                    atrasadas.append(d)
+            except:
+                pass
+    
+    if atrasadas:
+        with st.form("form_cobranca"):
+            checkboxes_cobranca = {}
+            # Ordena as notas por transportadora para facilitar a leitura visual
+            for p in sorted(atrasadas, key=lambda x: x["Transportadora"]):
+                prefixo_urg = "🚨 " if "URGENTE" in p['Prioridade'] else ""
+                label = f"[{p['Transportadora']}] {prefixo_urg}Nota: {p['Nota']} — {p['QTD']} vol ({p['Dias_Atraso']} dias aguardando)"
+                checkboxes_cobranca[p['Nota']] = st.checkbox(label)
+            
+            st.markdown("---")
+            btn_cobrar = st.form_submit_button("🔔 Enviar Lembretes Selecionados", use_container_width=True)
+            
+            if btn_cobrar:
+                notas_selecionadas = [nota for nota, marcada in checkboxes_cobranca.items() if marcada]
+                if not notas_selecionadas:
+                    st.warning("⚠️ Marque pelo menos uma nota na caixa de seleção.")
                 else:
-                    res = disparar_email_silencioso(n["Transportadora"], n["Nota"], n["QTD"], lembrete=True, prioridade=n["Prioridade"])
-                    if res is True: st.success("✅ Cobrança disparada com urgência!")
-                    else: st.error("❌ Erro ao enviar.")
-        with c_btn2:
-            if st.button("🗑️ Excluir Registro", type="primary", use_container_width=True):
-                try:
-                    planilha = conectar_planilha()
-                    aba = planilha.worksheet(n["Transportadora"])
-                    cel = aba.find(n["Nota"])
-                    aba.delete_rows(cel.row)
-                    st.success("✅ Apagado com sucesso!")
-                    del st.session_state['nota_gerenciar']
-                    try: st.rerun()
-                    except: st.experimental_rerun()
-                except Exception as e: st.error(f"Erro ao excluir: {e}")
+                    with st.spinner("Disparando e-mails de cobrança..."):
+                        sucessos = 0
+                        falhas = 0
+                        for nota in notas_selecionadas:
+                            dados_nota = next(item for item in atrasadas if item["Nota"] == nota)
+                            transp = dados_nota["Transportadora"]
+                            
+                            if transp == "FL":
+                                st.warning(f"⚠️ A Nota {nota} é da FL. Esta transportadora deve ser cobrada manualmente pelo Teams.")
+                                continue
+                                
+                            res = disparar_email_silencioso(transp, nota, dados_nota["QTD"], lembrete=True, prioridade=dados_nota["Prioridade"])
+                            if res is True:
+                                sucessos += 1
+                            else:
+                                falhas += 1
+                        
+                        if sucessos > 0:
+                            st.success(f"✅ {sucessos} e-mail(s) de cobrança enviado(s) com sucesso!")
+                        if falhas > 0:
+                            st.error(f"❌ Falha ao enviar {falhas} e-mail(s). Verifique as configurações.")
+    else:
+        st.success("🎉 Nenhuma carga com atraso na filial hoje!")

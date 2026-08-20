@@ -207,6 +207,9 @@ if aba_selecionada == "📦 Movimentação":
                         resultado_email = disparar_email_silencioso(transp_nova, nota_nova, qtd, prioridade=prioridade)
                         if resultado_email is True: st.info(f"📧 E-mail disparado para {transp_nova}.")
                         else: st.warning("⚠️ E-mail não configurado.")
+                    
+                    time.sleep(1.5)
+                    st.rerun()
                 except Exception as e: st.error(f"Erro no banco de dados: {e}")
 
     st.markdown("---")
@@ -250,6 +253,7 @@ if aba_selecionada == "📦 Movimentação":
                             st.success("✅ Baixa confirmada perfeitamente!")
                             
                             obter_dados_gerais.clear()
+                            time.sleep(1.5)
                             st.rerun()
                         except Exception as e: st.error(f"Erro na sincronização: {e}")
     else: st.success(f"🎉 Expedição limpa para a {transp_baixa}.")

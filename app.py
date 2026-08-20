@@ -159,7 +159,7 @@ aba_selecionada = st.radio("Navegação:", opcoes_abas, horizontal=True, label_v
 
 st.markdown("---")
 
-id_animacao = int(time.time() * 1000)
+id_animacao = abs(hash(aba_selecionada))
 st.markdown(f"""
 <div id="marcador-{id_animacao}"></div>
 <style>

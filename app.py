@@ -227,7 +227,7 @@ if aba_selecionada == "📦 Movimentação":
     
     if pendentes_transp:
         with st.form("form_baixa"):
-            st.markdown(f"📦 **Notas pendentes na doca ({transp_baixa}):**")
+            st.markdown(f"📦 **Notas pendentes na expedição ({transp_baixa}):**")
             checkboxes_notas = {}
             for p in pendentes_transp:
                 prefixo_urg = "🚨 " if "URGENTE" in p['Prioridade'] else ""
@@ -257,7 +257,7 @@ if aba_selecionada == "📦 Movimentação":
                             obter_dados_gerais.clear()
                             st.rerun()
                         except Exception as e: st.error(f"Erro na sincronização: {e}")
-    else: st.success(f"🎉 Doca limpa para a {transp_baixa}.")
+    else: st.success(f"🎉 Expedição limpa para a {transp_baixa}.")
 
 elif aba_selecionada == "📊 Painel & Relatórios":
     st.markdown("### 📊 Dashboard Analítico")

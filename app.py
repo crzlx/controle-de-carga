@@ -23,7 +23,7 @@ if "chat_history" not in st.session_state:
     ]
 
 # ==========================================
-# 🎨 CSS SEGURO (Apenas Animações e Cores)
+# 🎨 CSS SEGURO
 # ==========================================
 css_seguro = """
 <style>
@@ -106,7 +106,7 @@ except Exception as e:
     dados_globais = []
 
 # ==========================================
-# 🤖 CHATBOT OTIMIZADO
+# 🤖 CHATBOT
 # ==========================================
 @st.dialog("🤖 Chat com Alessandro IA")
 def abrir_chat_ia(dados_para_ia):
@@ -153,7 +153,7 @@ def abrir_chat_ia(dados_para_ia):
                         st.session_state.chat_history.append({"role": "assistant", "content": erro_msg})
 
 # ==========================================
-# SIDEBAR - MENU DE USUÁRIO E BOTÃO DO CHAT
+# SIDEBAR
 # ==========================================
 with st.sidebar:
     st.header("👤 Operador")
@@ -163,18 +163,33 @@ with st.sidebar:
         abrir_chat_ia(dados_globais)
 
 # ==========================================
-# CORPO PRINCIPAL DAS ABAS
+# CORPO PRINCIPAL - MENU DE NAVEGAÇÃO COM RESET
 # ==========================================
 st.title("🚚 Expedição Campos Dos Goytacazes")
 
-aba1, aba2, aba3, aba4, aba5 = st.tabs([
+opcoes_abas = [
     "📦 Movimentação", "📊 Painel & Relatórios", "🔍 Consulta Rápida", "⚙️ Editar/Excluir", "🔔 Cobrar Atrasos"
-])
+]
+
+# Troca do st.tabs visual por um Menu Radio Horizontal que força o reset na troca
+aba_selecionada = st.radio("Navegação:", opcoes_abas, horizontal=True, label_visibility="collapsed")
+
+# Lógica que detecta a troca de tela e limpa a memória com precisão
+if "aba_atual" not in st.session_state:
+    st.session_state["aba_atual"] = aba_selecionada
+
+if st.session_state["aba_atual"] != aba_selecionada:
+    st.session_state["aba_atual"] = aba_selecionada
+    if 'nota_gerenciar' in st.session_state:
+        del st.session_state['nota_gerenciar']
+    st.rerun()
+
+st.markdown("---")
 
 # ==========================================
 # ABA 1: MOVIMENTAÇÃO
 # ==========================================
-with aba1:
+if aba_selecionada == "📦 Movimentação":
     st.header("📝 Lançar Nova Solicitação")
     st.markdown(f"Lançamento registrado por: **{usuario_atual}**.")
     with st.form("form_nova", clear_on_submit=True):
@@ -211,7 +226,6 @@ with aba1:
     st.header("✅ Confirmar Coleta em Lote")
     transp_baixa = st.selectbox("Transportadora (Baixa)", TRANSPORTADORAS, key="t2")
     
-    # Usando os dados globais puxados apenas uma vez
     pendentes_transp = [d for d in dados_globais if d["Transportadora"] == transp_baixa and d["Data_Coleta"] == ""]
     
     if pendentes_transp:
@@ -246,9 +260,9 @@ with aba1:
     else: st.success(f"🎉 Doca limpa para a {transp_baixa}.")
 
 # ==========================================
-# ABA 2: PAINEL DA FILIAL (COM FILTROS)
+# ABA 2: PAINEL DA FILIAL
 # ==========================================
-with aba2:
+elif aba_selecionada == "📊 Painel & Relatórios":
     st.markdown("### 📊 Dashboard Analítico")
     with st.expander("📅 Filtrar Dados por Período", expanded=True):
         c_ini, c_fim = st.columns(2)
@@ -263,7 +277,6 @@ with aba2:
                 lancadas_periodo, coletadas_periodo, pendentes_gerais = [], [], []
                 tempos_coleta = {t: [] for t in TRANSPORTADORAS}
                 
-                # Usando os dados globais
                 for d in dados_globais:
                     dt_sol = parse_data(d["Data_Solicitacao"])
                     dt_col = parse_data(d["Data_Coleta"])
@@ -338,13 +351,12 @@ with aba2:
 # ==========================================
 # ABA 3: CONSULTA RÁPIDA
 # ==========================================
-with aba3:
+elif aba_selecionada == "🔍 Consulta Rápida":
     st.markdown("### 🔍 Pesquisa & Rastreabilidade")
     nota_busca = st.text_input("Digite o Número da Nota:", autocomplete="off")
     if st.button("Procurar Nota", use_container_width=True):
         if nota_busca:
             with st.spinner("Buscando rastros..."):
-                # Usando os dados globais
                 encontradas = [d for d in dados_globais if d["Nota"] == nota_busca.strip()]
                 if encontradas:
                     for nota in encontradas:
@@ -362,14 +374,13 @@ with aba3:
                 else: st.error("❌ Nota não encontrada.")
 
 # ==========================================
-# ABA 4: GERENCIAR (EXCLUIR)
+# ABA 4: EDITAR E EXCLUIR
 # ==========================================
-with aba4:
-    st.markdown("### ⚙️ Localizar e Excluir Registro")
-    nota_alvo = st.text_input("Digite a Nota Fiscal que deseja remover:", autocomplete="off")
+elif aba_selecionada == "⚙️ Editar/Excluir":
+    st.markdown("### ⚙️ Localizar, Editar ou Excluir Registro")
+    nota_alvo = st.text_input("Digite a Nota Fiscal para gerenciar:", autocomplete="off")
     if st.button("Buscar Registro", use_container_width=True):
         if nota_alvo:
-            # Usando os dados globais
             encontradas = [d for d in dados_globais if d["Nota"] == nota_alvo.strip()]
             if encontradas: st.session_state['nota_gerenciar'] = encontradas[0]
             else:
@@ -379,6 +390,41 @@ with aba4:
     if 'nota_gerenciar' in st.session_state:
         n = st.session_state['nota_gerenciar']
         st.info(f"Registro Encontrado: **{n['Nota']}** ({n['Transportadora']}) - {n['QTD']} volumes")
+        
+        with st.expander("✏️ Editar Informações (Atualização Interna)", expanded=True):
+            with st.form("form_editar_nota"):
+                st.markdown("*(Nenhum e-mail será enviado à transportadora ao salvar as alterações abaixo)*")
+                col_e1, col_e2 = st.columns(2)
+                with col_e1:
+                    novo_qtd = st.text_input("QTD (Volumes)", value=n['QTD'])
+                    nova_prioridade = st.selectbox("Prioridade", ["Normal", "🚨 URGENTE"], index=0 if "Normal" in n["Prioridade"] else 1)
+                with col_e2:
+                    nova_dt_sol = st.text_input("Data Solicitação (DD/MM/AAAA)", value=n['Data_Solicitacao'])
+                    nova_dt_emi = st.text_input("Data Emissão da Nota (DD/MM/AAAA)", value=n['Data_Emissao_Nota'])
+
+                st.markdown("<small><i>Para alterar o número da Nota ou Transportadora, exclua o registro e lance novamente.</i></small>", unsafe_allow_html=True)
+                btn_salvar = st.form_submit_button("💾 Salvar Alterações na Planilha", use_container_width=True)
+
+                if btn_salvar:
+                    with st.spinner("Salvando silenciosamente..."):
+                        try:
+                            planilha = conectar_planilha()
+                            aba = planilha.worksheet(n["Transportadora"])
+                            cel = aba.find(n["Nota"])
+
+                            aba.update_cell(cel.row, 1, novo_qtd)
+                            aba.update_cell(cel.row, 3, nova_dt_sol)
+                            aba.update_cell(cel.row, 5, nova_dt_emi)
+                            aba.update_cell(cel.row, 7, nova_prioridade)
+
+                            st.success("✅ Atualizado na planilha com sucesso! (Nenhum aviso externo foi disparado).")
+                            del st.session_state['nota_gerenciar']
+                            try: st.rerun()
+                            except: st.experimental_rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao atualizar: {e}")
+        
+        st.markdown("---")
         
         if st.button("🗑️ Excluir Registro Definitivamente", type="primary", use_container_width=True):
             try:
@@ -395,13 +441,12 @@ with aba4:
 # ==========================================
 # ABA 5: COBRAR ATRASOS
 # ==========================================
-with aba5:
+elif aba_selecionada == "🔔 Cobrar Atrasos":
     st.markdown("### 🔔 Disparar Cobrança (Notas Atrasadas)")
     st.markdown("Lista automática de notas aguardando coleta há **1 dia ou mais** na filial.")
     
     hoje_dt = datetime.now()
     
-    # Filtra as notas usando os dados globais
     atrasadas = []
     for d in dados_globais:
         if d["Data_Coleta"] == "":

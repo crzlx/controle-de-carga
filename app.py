@@ -83,7 +83,8 @@ def obter_dados_gerais():
                         "Transportadora": transp, "QTD": l[0].strip(), "Nota": str(l[1]).strip(),
                         "Data_Solicitacao": l[2].strip(), "Data_Coleta": l[3].strip(),
                         "Data_Emissao_Nota": l[4].strip(), "Usuario_Lancamento": l[5].strip() if len(l)>5 else "-",
-                        "Prioridade": l[6].strip() if len(l)>6 else "Normal", "Usuario_Baixa": l[7].strip() if len(l)>7 else "-"
+                        "Prioridade": l[6].strip() if len(l)>6 else "Normal", "Usuario_Baixa": l[7].strip() if len(l)>7 else "-",
+                        "Cidade_Destino": l[8].strip() if len(l)>8 else "-"
                     })
         except: pass
     return dados
@@ -184,6 +185,7 @@ if aba_selecionada == "📦 Movimentação":
         with col1:
             qtd = st.number_input("QTD (Volumes)", min_value=1, step=1)
             data_solicitacao = st.date_input("Data da Solicitação", format="DD/MM/YYYY")
+            cidade_destino = st.text_input("Cidade Destino", autocomplete="off")
         with col2:
             nota_nova = st.text_input("Nota (Nº)", autocomplete="off")
             data_emissao = st.date_input("Data de Emissão da Nota", format="DD/MM/YYYY")
@@ -197,7 +199,7 @@ if aba_selecionada == "📦 Movimentação":
                     aba_sel = planilha.worksheet(transp_nova)
                     formatada_solicitacao = data_solicitacao.strftime("%d/%m/%Y")
                     formatada_emissao = data_emissao.strftime("%d/%m/%Y")
-                    aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao, usuario_atual, prioridade])
+                    aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao, usuario_atual, prioridade, "", cidade_destino])
                     st.success(f"✅ Nota {nota_nova} registrada!")
                     
                     obter_dados_gerais.clear()
@@ -339,7 +341,7 @@ elif aba_selecionada == "📊 Painel & Relatórios":
                 st.text_area("Texto Copiável:", value=texto_relatorio, height=300)
                 
                 output = io.StringIO()
-                writer = csv.DictWriter(output, fieldnames=["Transportadora", "QTD", "Nota", "Data_Solicitacao", "Data_Coleta", "Data_Emissao_Nota", "Usuario_Lancamento", "Prioridade", "Usuario_Baixa"])
+                writer = csv.DictWriter(output, fieldnames=["Transportadora", "QTD", "Nota", "Data_Solicitacao", "Data_Coleta", "Data_Emissao_Nota", "Usuario_Lancamento", "Prioridade", "Usuario_Baixa", "Cidade_Destino"])
                 writer.writeheader()
                 writer.writerows(dados_globais)
                 st.download_button("📥 Baixar Histórico em CSV", data=output.getvalue().encode('utf-8'), file_name=f"relatorio.csv", mime="text/csv", use_container_width=True)
@@ -358,7 +360,7 @@ elif aba_selecionada == "🔍 Consulta Rápida":
                         st.markdown(f"""
                         <div style="background-color: {cor_status}; color: {cor_texto}; padding: 15px; border-radius: 10px; margin-top: 10px;">
                             <h4 style="margin-top:0;">{ '🚨 ' if 'URGENTE' in nota['Prioridade'] else ''}Nota: {nota['Nota']}</h4>
-                            <b>Status:</b> {status}<br><b>Transportadora:</b> {nota['Transportadora']}<br><b>Volumes:</b> {nota['QTD']}<br>
+                            <b>Status:</b> {status}<br><b>Transportadora:</b> {nota['Transportadora']}<br><b>Volumes:</b> {nota['QTD']}<br><b>Cidade Destino:</b> {nota['Cidade_Destino']}<br>
                             <hr style="border-top: 1px solid {cor_texto}; opacity: 0.3;">
                             <b>Lançado em:</b> {nota['Data_Solicitacao']} <i>({nota['Usuario_Lancamento']})</i><br>
                             <b>Baixado em:</b> {nota['Data_Coleta'] if nota['Data_Coleta'] != "" else "-"} <i>({nota['Usuario_Baixa']})</i>
@@ -388,6 +390,7 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
                 with col_e1:
                     novo_qtd = st.text_input("QTD (Volumes)", value=n['QTD'])
                     nova_prioridade = st.selectbox("Prioridade", ["Normal", "🚨 URGENTE"], index=0 if "Normal" in n["Prioridade"] else 1)
+                    nova_cidade = st.text_input("Cidade Destino", value=n.get('Cidade_Destino', '-'))
                 with col_e2:
                     nova_dt_sol = st.text_input("Data Solicitação (DD/MM/AAAA)", value=n['Data_Solicitacao'])
                     nova_dt_emi = st.text_input("Data Emissão da Nota (DD/MM/AAAA)", value=n['Data_Emissao_Nota'])
@@ -406,11 +409,13 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
                             aba.update_cell(cel.row, 3, nova_dt_sol)
                             aba.update_cell(cel.row, 5, nova_dt_emi)
                             aba.update_cell(cel.row, 7, nova_prioridade)
+                            aba.update_cell(cel.row, 9, nova_cidade)
 
                             st.success("✅ Atualizado na planilha com sucesso! (Nenhum aviso externo foi disparado).")
                             del st.session_state['nota_gerenciar']
                             
                             obter_dados_gerais.clear()
+                            time.sleep(1.5)
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erro ao atualizar: {e}")

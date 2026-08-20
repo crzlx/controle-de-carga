@@ -216,9 +216,14 @@ if aba_selecionada == "📦 Movimentação":
 
     st.markdown("---")
     st.header("✅ Confirmar Coleta em Lote")
-    transp_baixa = st.selectbox("Transportadora (Baixa)", TRANSPORTADORAS, key="t2")
     
-    pendentes_transp = [d for d in dados_globais if d["Transportadora"] == transp_baixa and d["Data_Coleta"] == ""]
+    opcoes_baixa = ["Todos"] + TRANSPORTADORAS
+    transp_baixa = st.selectbox("Transportadora (Baixa)", opcoes_baixa, key="t2")
+    
+    if transp_baixa == "Todos":
+        pendentes_transp = [d for d in dados_globais if d["Data_Coleta"] == ""]
+    else:
+        pendentes_transp = [d for d in dados_globais if d["Transportadora"] == transp_baixa and d["Data_Coleta"] == ""]
     
     if pendentes_transp:
         with st.form("form_baixa"):
@@ -226,7 +231,7 @@ if aba_selecionada == "📦 Movimentação":
             checkboxes_notas = {}
             for p in pendentes_transp:
                 prefixo_urg = "🚨 " if "URGENTE" in p['Prioridade'] else ""
-                label = f"{prefixo_urg}Nº {p['Nota']} — {p['QTD']} volumes (Sol: {p['Data_Solicitacao']})"
+                label = f"[{p['Transportadora']}] {prefixo_urg}Nº {p['Nota']} — {p['QTD']} volumes (Sol: {p['Data_Solicitacao']})"
                 checkboxes_notas[p['Nota']] = st.checkbox(label)
             st.markdown("---")
             data_coleta = st.date_input("Data da Coleta Real", format="DD/MM/YYYY")
@@ -239,9 +244,11 @@ if aba_selecionada == "📦 Movimentação":
                     with st.spinner("Sincronizando..."):
                         try:
                             planilha = conectar_planilha()
-                            aba_sel = planilha.worksheet(transp_baixa)
                             coleta_formatada = data_coleta.strftime("%d/%m/%Y")
                             for nota in notas_selecionadas:
+                                info_nota = next(item for item in pendentes_transp if item["Nota"] == nota)
+                                transp_nota = info_nota["Transportadora"]
+                                aba_sel = planilha.worksheet(transp_nota)
                                 celula = aba_sel.find(nota)
                                 aba_sel.update_cell(celula.row, 4, coleta_formatada)
                                 aba_sel.update_cell(celula.row, 8, usuario_atual)

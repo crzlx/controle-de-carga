@@ -86,7 +86,10 @@ def obter_dados_gerais():
                         "Cidade_Destino": l[8].strip() if len(l)>8 else "-",
                         "Hora_Solicitacao": l[9].strip() if len(l)>9 else "-"
                     })
-        except: pass
+        except gspread.WorksheetNotFound:
+            st.error(f"❌ Aba não encontrada no Google Sheets: '{transp}'. Verifique se o nome está escrito exatamente assim, sem espaços ocultos.")
+        except Exception as e:
+            st.error(f"❌ Erro ao ler os dados da transportadora {transp}: {e}")
     return dados
 
 try:
@@ -453,8 +456,9 @@ elif aba_selecionada == "🔔 Cobrar Atrasos":
                 if dias_parado >= 1:
                     d["Dias_Atraso"] = dias_parado
                     atrasadas.append(d)
-            except:
-                pass
+            except Exception as e:
+                # Caso haja um erro na data, agora ele te avisa na barra lateral ao invés de ignorar a carga silenciosamente.
+                st.sidebar.warning(f"⚠️ Erro de data na nota {d['Nota']} ({d['Transportadora']}). Verifique a formatação na planilha.")
     
     if atrasadas:
         with st.form("form_cobranca"):

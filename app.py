@@ -76,12 +76,11 @@ def obter_dados_gerais():
     for transp in TRANSPORTADORAS:
         try:
             aba = planilha.worksheet(transp)
-            linhas = aba.get_all_values()[1:] # Pula o cabeçalho
+            linhas = aba.get_all_values()[1:]
             
             for l in linhas:
-                # BLINDAGEM: Preenche a lista com vazios para garantir no mínimo 10 posições
-                # Isso impede que notas digitadas à mão sem as últimas colunas quebrem a FL.
-                l = l + [""] * (10 - len(l)) 
+                while len(l) < 11:
+                    l.append("")
                 
                 nota = str(l[1]).strip()
                 if nota != "":
@@ -96,7 +95,8 @@ def obter_dados_gerais():
                         "Prioridade": l[6].strip() if l[6].strip() else "Normal", 
                         "Usuario_Baixa": l[7].strip() if l[7].strip() else "-",
                         "Cidade_Destino": l[8].strip() if l[8].strip() else "-",
-                        "Hora_Solicitacao": l[9].strip() if l[9].strip() else "-"
+                        "Hora_Solicitacao": l[9].strip() if l[9].strip() else "-",
+                        "Hora_Coleta": l[10].strip() if l[10].strip() else "-"
                     })
         except gspread.exceptions.WorksheetNotFound:
             st.error(f"❌ Aba não encontrada no Google Sheets: '{transp}'. Verifique se o nome tem espaços ocultos.")
@@ -218,7 +218,8 @@ if aba_selecionada == "📦 Movimentação":
                     aba_sel = planilha.worksheet(transp_nova)
                     formatada_solicitacao = data_solicitacao.strftime("%d/%m/%Y")
                     formatada_emissao = data_emissao.strftime("%d/%m/%Y")
-                    aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao, usuario_atual, prioridade, "", cidade_destino, hora_atual])
+                    
+                    aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao, usuario_atual, prioridade, "", cidade_destino, hora_atual, ""])
                     st.success(f"✅ Nota {nota_nova} registrada!")
                     
                     obter_dados_gerais.clear()
@@ -263,6 +264,9 @@ if aba_selecionada == "📦 Movimentação":
                 else:
                     with st.spinner("Sincronizando..."):
                         try:
+                            fuso_br = timezone(timedelta(hours=-3))
+                            hora_baixa_atual = datetime.now(fuso_br).strftime("%H:%M")
+                            
                             planilha = conectar_planilha()
                             coleta_formatada = data_coleta.strftime("%d/%m/%Y")
                             for nota in notas_selecionadas:
@@ -270,9 +274,12 @@ if aba_selecionada == "📦 Movimentação":
                                 transp_nota = info_nota["Transportadora"]
                                 aba_sel = planilha.worksheet(transp_nota)
                                 celula = aba_sel.find(nota)
+                                
                                 aba_sel.update_cell(celula.row, 4, coleta_formatada)
                                 aba_sel.update_cell(celula.row, 8, usuario_atual)
-                            st.success("✅ Baixa confirmada perfeitamente!")
+                                aba_sel.update_cell(celula.row, 11, hora_baixa_atual)
+                                
+                            st.success(f"✅ Baixa confirmada perfeitamente às {hora_baixa_atual}!")
                             
                             obter_dados_gerais.clear()
                             time.sleep(4)
@@ -291,7 +298,6 @@ elif aba_selecionada == "📊 Painel & Relatórios":
         if not filtro_inicio or not filtro_fim: st.warning("⚠️ Selecione as datas Inicial e Final.")
         else:
             with st.spinner("Processando..."):
-                # Zera as horas para calcular apenas dias inteiros de calendário
                 hoje_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
                 lancadas_periodo, coletadas_periodo, pendentes_gerais = [], [], []
                 tempos_coleta = {t: [] for t in TRANSPORTADORAS}
@@ -339,7 +345,7 @@ elif aba_selecionada == "📊 Painel & Relatórios":
                             if dias_parado == 0: item["Atraso"] = "🟢 Hoje"
                             elif dias_parado == 1: item["Atraso"] = "🟡 1 dia"
                             elif dias_parado > 1: item["Atraso"] = f"🔴 {dias_parado} dias"
-                            else: item["Atraso"] = "🟢 Hoje" # Prevenção se lançar carga adiantada
+                            else: item["Atraso"] = "🟢 Hoje"
                         except: item["Atraso"] = "⚪ N/A"
                         lista_sla.append(item)
                     st.dataframe(lista_sla, use_container_width=True, hide_index=True)
@@ -364,7 +370,7 @@ elif aba_selecionada == "📊 Painel & Relatórios":
                 st.text_area("Texto Copiável:", value=texto_relatorio, height=300)
                 
                 output = io.StringIO()
-                writer = csv.DictWriter(output, fieldnames=["Transportadora", "QTD", "Nota", "Data_Solicitacao", "Data_Coleta", "Data_Emissao_Nota", "Usuario_Lancamento", "Prioridade", "Usuario_Baixa", "Cidade_Destino", "Hora_Solicitacao"])
+                writer = csv.DictWriter(output, fieldnames=["Transportadora", "QTD", "Nota", "Data_Solicitacao", "Data_Coleta", "Data_Emissao_Nota", "Usuario_Lancamento", "Prioridade", "Usuario_Baixa", "Cidade_Destino", "Hora_Solicitacao", "Hora_Coleta"])
                 writer.writeheader()
                 writer.writerows(dados_globais)
                 st.download_button("📥 Baixar Histórico em CSV", data=output.getvalue().encode('utf-8'), file_name=f"relatorio.csv", mime="text/csv", use_container_width=True)
@@ -380,13 +386,17 @@ elif aba_selecionada == "🔍 Consulta Rápida":
                     for nota in encontradas:
                         status = "✅ Já Coletada" if nota["Data_Coleta"] != "" else "⏳ Aguardando"
                         cor_status, cor_texto = ("#d4edda", "#155724") if nota["Data_Coleta"] != "" else ("#fff3cd", "#856404")
+                        
+                        hora_sol_info = f" às {nota.get('Hora_Solicitacao', '-')}" if nota.get('Hora_Solicitacao', '-') != "-" else ""
+                        hora_col_info = f" às {nota.get('Hora_Coleta', '-')}" if nota.get('Hora_Coleta', '-') != "-" else ""
+                        
                         st.markdown(f"""
                         <div style="background-color: {cor_status}; color: {cor_texto}; padding: 15px; border-radius: 10px; margin-top: 10px;">
                             <h4 style="margin-top:0;">{ '🚨 ' if 'URGENTE' in nota['Prioridade'] else ''}Nota: {nota['Nota']}</h4>
                             <b>Status:</b> {status}<br><b>Transportadora:</b> {nota['Transportadora']}<br><b>Volumes:</b> {nota['QTD']}<br><b>Cidade Destino:</b> {nota['Cidade_Destino']}<br>
                             <hr style="border-top: 1px solid {cor_texto}; opacity: 0.3;">
-                            <b>Lançado em:</b> {nota['Data_Solicitacao']} às {nota.get('Hora_Solicitacao', '-')} <i>({nota['Usuario_Lancamento']})</i><br>
-                            <b>Baixado em:</b> {nota['Data_Coleta'] if nota['Data_Coleta'] != "" else "-"} <i>({nota['Usuario_Baixa']})</i>
+                            <b>Lançado em:</b> {nota['Data_Solicitacao']}{hora_sol_info} <i>({nota['Usuario_Lancamento']})</i><br>
+                            <b>Baixado em:</b> {nota['Data_Coleta'] if nota['Data_Coleta'] != "" else "-"}{hora_col_info} <i>({nota['Usuario_Baixa']})</i>
                         </div>
                         """, unsafe_allow_html=True)
                 else: st.error("❌ Nota não encontrada.")
@@ -408,7 +418,6 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
         
         with st.expander("✏️ Editar Informações (Atualização Interna)", expanded=True):
             with st.form("form_editar_nota"):
-                st.markdown("*(Nenhum e-mail será enviado à transportadora ao salvar as alterações abaixo)*")
                 col_e1, col_e2 = st.columns(2)
                 with col_e1:
                     novo_qtd = st.text_input("QTD (Volumes)", value=n['QTD'])
@@ -462,7 +471,6 @@ elif aba_selecionada == "🔔 Cobrar Atrasos":
     st.markdown("### 🔔 Disparar Cobrança (Notas Atrasadas)")
     st.markdown("Lista automática de notas aguardando coleta há **1 dia ou mais** na filial.")
     
-    # Substituindo horas por zero para manter o comparativo exato de DIAS.
     hoje_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
     atrasadas = []

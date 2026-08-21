@@ -76,20 +76,33 @@ def obter_dados_gerais():
     for transp in TRANSPORTADORAS:
         try:
             aba = planilha.worksheet(transp)
-            for l in aba.get_all_values()[1:]:
-                if len(l) >= 2 and str(l[1]).strip() != "":
+            linhas = aba.get_all_values()[1:] # Pula o cabeçalho
+            
+            for l in linhas:
+                # BLINDAGEM: Preenche a lista com vazios para garantir no mínimo 10 posições
+                # Isso impede que notas digitadas à mão sem as últimas colunas quebrem a FL.
+                l = l + [""] * (10 - len(l)) 
+                
+                nota = str(l[1]).strip()
+                if nota != "":
                     dados.append({
-                        "Transportadora": transp, "QTD": l[0].strip(), "Nota": str(l[1]).strip(),
-                        "Data_Solicitacao": l[2].strip(), "Data_Coleta": l[3].strip(),
-                        "Data_Emissao_Nota": l[4].strip(), "Usuario_Lancamento": l[5].strip() if len(l)>5 else "-",
-                        "Prioridade": l[6].strip() if len(l)>6 else "Normal", "Usuario_Baixa": l[7].strip() if len(l)>7 else "-",
-                        "Cidade_Destino": l[8].strip() if len(l)>8 else "-",
-                        "Hora_Solicitacao": l[9].strip() if len(l)>9 else "-"
+                        "Transportadora": transp, 
+                        "QTD": l[0].strip(), 
+                        "Nota": nota,
+                        "Data_Solicitacao": l[2].strip(), 
+                        "Data_Coleta": l[3].strip(),
+                        "Data_Emissao_Nota": l[4].strip(), 
+                        "Usuario_Lancamento": l[5].strip() if l[5].strip() else "-",
+                        "Prioridade": l[6].strip() if l[6].strip() else "Normal", 
+                        "Usuario_Baixa": l[7].strip() if l[7].strip() else "-",
+                        "Cidade_Destino": l[8].strip() if l[8].strip() else "-",
+                        "Hora_Solicitacao": l[9].strip() if l[9].strip() else "-"
                     })
-        except gspread.WorksheetNotFound:
-            st.error(f"❌ Aba não encontrada no Google Sheets: '{transp}'. Verifique se o nome está escrito exatamente assim, sem espaços ocultos.")
+        except gspread.exceptions.WorksheetNotFound:
+            st.error(f"❌ Aba não encontrada no Google Sheets: '{transp}'. Verifique se o nome tem espaços ocultos.")
         except Exception as e:
-            st.error(f"❌ Erro ao ler os dados da transportadora {transp}: {e}")
+            st.error(f"❌ Erro ao ler dados da transportadora {transp}: {e}")
+            
     return dados
 
 try:
@@ -278,7 +291,8 @@ elif aba_selecionada == "📊 Painel & Relatórios":
         if not filtro_inicio or not filtro_fim: st.warning("⚠️ Selecione as datas Inicial e Final.")
         else:
             with st.spinner("Processando..."):
-                hoje_dt = datetime.now()
+                # Zera as horas para calcular apenas dias inteiros de calendário
+                hoje_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
                 lancadas_periodo, coletadas_periodo, pendentes_gerais = [], [], []
                 tempos_coleta = {t: [] for t in TRANSPORTADORAS}
                 
@@ -320,10 +334,12 @@ elif aba_selecionada == "📊 Painel & Relatórios":
                     for p in pendentes_gerais:
                         item = {"Transportadora": p["Transportadora"], "Nota": p["Nota"], "QTD": p["QTD"], "Prioridade": "🚨 URGENTE" if "URGENTE" in p["Prioridade"] else "Normal"}
                         try:
-                            dias_parado = (hoje_dt - datetime.strptime(p["Data_Solicitacao"], "%d/%m/%Y")).days
+                            data_sol_dt = datetime.strptime(p["Data_Solicitacao"], "%d/%m/%Y")
+                            dias_parado = (hoje_dt - data_sol_dt).days
                             if dias_parado == 0: item["Atraso"] = "🟢 Hoje"
                             elif dias_parado == 1: item["Atraso"] = "🟡 1 dia"
-                            else: item["Atraso"] = f"🔴 {dias_parado} dias"
+                            elif dias_parado > 1: item["Atraso"] = f"🔴 {dias_parado} dias"
+                            else: item["Atraso"] = "🟢 Hoje" # Prevenção se lançar carga adiantada
                         except: item["Atraso"] = "⚪ N/A"
                         lista_sla.append(item)
                     st.dataframe(lista_sla, use_container_width=True, hide_index=True)
@@ -446,19 +462,21 @@ elif aba_selecionada == "🔔 Cobrar Atrasos":
     st.markdown("### 🔔 Disparar Cobrança (Notas Atrasadas)")
     st.markdown("Lista automática de notas aguardando coleta há **1 dia ou mais** na filial.")
     
-    hoje_dt = datetime.now()
+    # Substituindo horas por zero para manter o comparativo exato de DIAS.
+    hoje_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
     atrasadas = []
     for d in dados_globais:
         if d["Data_Coleta"] == "":
-            try:
-                dias_parado = (hoje_dt - datetime.strptime(d["Data_Solicitacao"], "%d/%m/%Y")).days
-                if dias_parado >= 1:
-                    d["Dias_Atraso"] = dias_parado
-                    atrasadas.append(d)
-            except Exception as e:
-                # Caso haja um erro na data, agora ele te avisa na barra lateral ao invés de ignorar a carga silenciosamente.
-                st.sidebar.warning(f"⚠️ Erro de data na nota {d['Nota']} ({d['Transportadora']}). Verifique a formatação na planilha.")
+            if d.get("Data_Solicitacao"):
+                try:
+                    data_sol_dt = datetime.strptime(d["Data_Solicitacao"], "%d/%m/%Y")
+                    dias_parado = (hoje_dt - data_sol_dt).days
+                    if dias_parado >= 1:
+                        d["Dias_Atraso"] = dias_parado
+                        atrasadas.append(d)
+                except Exception as e:
+                    st.sidebar.warning(f"⚠️ Erro de data na nota {d['Nota']} ({d['Transportadora']}). Verifique a formatação na planilha.")
     
     if atrasadas:
         with st.form("form_cobranca"):

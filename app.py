@@ -37,7 +37,6 @@ def disparar_email_silencioso(transportadora, nota, qtd, lembrete=False, priorid
         remetente = st.secrets["EMAIL_REMETENTE"]
         senha = st.secrets["SENHA_EMAIL"]
         emails_destino = {
-            "JARBAS": "adm.campos@italogrj.com.br",
             "TRANSCHERRER": "filial.campos@transcherrer.com.br, cidy.neves@transcherrer.com.br, filial.campos02@transcherrer.com.br",
             "GENEROSO": "Encarregado.cgo@generoso.com.br"
         }
@@ -205,6 +204,7 @@ if aba_selecionada == "📦 Movimentação":
                     obter_dados_gerais.clear()
                     
                     if transp_nova == "FL": st.info("💻 **ATENÇÃO:** O aviso para a FL deve ser enviado via Teams!")
+                    elif transp_nova == "JARBAS": st.info("🚛 **ATENÇÃO:** A Jarbas já acompanha essa nova coleta em tempo real pelo Painel Espelho!")
                     else:
                         resultado_email = disparar_email_silencioso(transp_nova, nota_nova, qtd, prioridade=prioridade)
                         if resultado_email is True: st.info(f"📧 E-mail disparado para {transp_nova}.")
@@ -477,6 +477,9 @@ elif aba_selecionada == "🔔 Cobrar Atrasos":
                             
                             if transp == "FL":
                                 st.warning(f"⚠️ A Nota {nota} é da FL. Esta transportadora deve ser cobrada manualmente pelo Teams.")
+                                continue
+                            if transp == "JARBAS":
+                                st.warning(f"⚠️ A Nota {nota} é da Jarbas. As cobranças devem ser verificadas por eles no Painel Espelho.")
                                 continue
                                 
                             res = disparar_email_silencioso(transp, nota, dados_nota["QTD"], lembrete=True, prioridade=dados_nota["Prioridade"])

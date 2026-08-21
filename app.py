@@ -208,7 +208,8 @@ if aba_selecionada == "📦 Movimentação":
         enviar_nova = st.form_submit_button("Registrar Nota", use_container_width=True)
         
         if enviar_nova:
-            if nota_nova == "": st.warning("⚠️ Preencha o número da Nota.")
+            if nota_nova.strip() == "" or cidade_destino.strip() == "": 
+                st.warning("⚠️ Preencha obrigatoriamente o número da Nota e a Cidade Destino.")
             else:
                 try:
                     fuso_br = timezone(timedelta(hours=-3))

@@ -2,7 +2,7 @@ import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import time
 import google.generativeai as genai
 import smtplib
@@ -83,7 +83,8 @@ def obter_dados_gerais():
                         "Data_Solicitacao": l[2].strip(), "Data_Coleta": l[3].strip(),
                         "Data_Emissao_Nota": l[4].strip(), "Usuario_Lancamento": l[5].strip() if len(l)>5 else "-",
                         "Prioridade": l[6].strip() if len(l)>6 else "Normal", "Usuario_Baixa": l[7].strip() if len(l)>7 else "-",
-                        "Cidade_Destino": l[8].strip() if len(l)>8 else "-"
+                        "Cidade_Destino": l[8].strip() if len(l)>8 else "-",
+                        "Hora_Solicitacao": l[9].strip() if len(l)>9 else "-"
                     })
         except: pass
     return dados
@@ -194,11 +195,14 @@ if aba_selecionada == "📦 Movimentação":
             if nota_nova == "": st.warning("⚠️ Preencha o número da Nota.")
             else:
                 try:
+                    fuso_br = timezone(timedelta(hours=-3))
+                    hora_atual = datetime.now(fuso_br).strftime("%H:%M")
+                    
                     planilha = conectar_planilha()
                     aba_sel = planilha.worksheet(transp_nova)
                     formatada_solicitacao = data_solicitacao.strftime("%d/%m/%Y")
                     formatada_emissao = data_emissao.strftime("%d/%m/%Y")
-                    aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao, usuario_atual, prioridade, "", cidade_destino])
+                    aba_sel.append_row([qtd, nota_nova, formatada_solicitacao, "", formatada_emissao, usuario_atual, prioridade, "", cidade_destino, hora_atual])
                     st.success(f"✅ Nota {nota_nova} registrada!")
                     
                     obter_dados_gerais.clear()
@@ -341,7 +345,7 @@ elif aba_selecionada == "📊 Painel & Relatórios":
                 st.text_area("Texto Copiável:", value=texto_relatorio, height=300)
                 
                 output = io.StringIO()
-                writer = csv.DictWriter(output, fieldnames=["Transportadora", "QTD", "Nota", "Data_Solicitacao", "Data_Coleta", "Data_Emissao_Nota", "Usuario_Lancamento", "Prioridade", "Usuario_Baixa", "Cidade_Destino"])
+                writer = csv.DictWriter(output, fieldnames=["Transportadora", "QTD", "Nota", "Data_Solicitacao", "Data_Coleta", "Data_Emissao_Nota", "Usuario_Lancamento", "Prioridade", "Usuario_Baixa", "Cidade_Destino", "Hora_Solicitacao"])
                 writer.writeheader()
                 writer.writerows(dados_globais)
                 st.download_button("📥 Baixar Histórico em CSV", data=output.getvalue().encode('utf-8'), file_name=f"relatorio.csv", mime="text/csv", use_container_width=True)
@@ -362,7 +366,7 @@ elif aba_selecionada == "🔍 Consulta Rápida":
                             <h4 style="margin-top:0;">{ '🚨 ' if 'URGENTE' in nota['Prioridade'] else ''}Nota: {nota['Nota']}</h4>
                             <b>Status:</b> {status}<br><b>Transportadora:</b> {nota['Transportadora']}<br><b>Volumes:</b> {nota['QTD']}<br><b>Cidade Destino:</b> {nota['Cidade_Destino']}<br>
                             <hr style="border-top: 1px solid {cor_texto}; opacity: 0.3;">
-                            <b>Lançado em:</b> {nota['Data_Solicitacao']} <i>({nota['Usuario_Lancamento']})</i><br>
+                            <b>Lançado em:</b> {nota['Data_Solicitacao']} às {nota.get('Hora_Solicitacao', '-')} <i>({nota['Usuario_Lancamento']})</i><br>
                             <b>Baixado em:</b> {nota['Data_Coleta'] if nota['Data_Coleta'] != "" else "-"} <i>({nota['Usuario_Baixa']})</i>
                         </div>
                         """, unsafe_allow_html=True)

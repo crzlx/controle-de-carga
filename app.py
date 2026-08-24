@@ -97,7 +97,7 @@ def conectar_planilha():
     )
     cliente = gspread.authorize(credenciais)
     return cliente.open_by_url(
-        "https://docs.google.com/spreadsheets/d/1yHThW-nbcwxCcNTnb66PP1YHbHpCE9_ep3DC33-OZs4/edit?usp=sharing"
+        "https://docs.google.com/spreadsheets/d/1zjiGtrzY64rJQnU3DdxqivFtgUPxb_YsC-1PBFC2MsU/edit?usp=sharing"
     )
 
 

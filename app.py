@@ -14,6 +14,9 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="wide")
 
+# Link Base da Planilha no Google Sheets
+PLANILHA_URL = "https://docs.google.com/spreadsheets/d/1zjiGtrzY64rJQnU3DdxqivFtgUPxb_YsC-1PBFC2MsU/edit?usp=sharing"
+
 TRANSPORTADORAS = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
 
 if "chat_history" not in st.session_state:
@@ -96,9 +99,7 @@ def conectar_planilha():
         cred_dict, escopo
     )
     cliente = gspread.authorize(credenciais)
-    return cliente.open_by_url(
-        "https://docs.google.com/spreadsheets/d/1zjiGtrzY64rJQnU3DdxqivFtgUPxb_YsC-1PBFC2MsU/edit?usp=sharing"
-    )
+    return cliente.open_by_url(PLANILHA_URL)
 
 
 def parse_data(data_str):
@@ -240,6 +241,12 @@ with st.sidebar:
     st.markdown("---")
     if st.button("💬 Falar com Alessandro IA", use_container_width=True):
         abrir_chat_ia(dados_globais)
+    st.markdown("---")
+    st.link_button(
+        "📊 Abrir Planilha Base (Google Sheets)",
+        PLANILHA_URL,
+        use_container_width=True,
+    )
 
 st.title("🚚 Expedição Campos Dos Goytacazes")
 
@@ -632,7 +639,7 @@ elif aba_selecionada == "📊 Painel & Relatórios":
                     for transp, notas in agrupado_pendentes.items():
                         texto_relatorio += f"\n⚠️ *{transp}* ({len(notas)}):\n"
                         for n in notas:
-                            texto_relatorio += f"   ↳ {n}\n"
+                            texto_relatorio += f"    ↳ {n}\n"
 
                 st.text_area(
                     "Texto Copiável:", value=texto_relatorio, height=300
@@ -773,149 +780,161 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
                 )
 
                 if btn_salvar:
-                    with st.spinner("Salvando silenciosamente..."):
+                    with st.spinner("Salvando alterações..."):
                         try:
                             planilha = conectar_planilha()
                             aba = planilha.worksheet(n["Transportadora"])
-                            cel = aba.find(n["Nota"])
+                            celula = aba.find(n["Nota"])
+                            if celula:
+                                aba.update_cell(celula.row, 1, novo_qtd)
+                                aba.update_cell(celula.row, 3, nova_dt_sol)
+                                aba.update_cell(celula.row, 5, nova_dt_emi)
+                                aba.update_cell(celula.row, 7, nova_prioridade)
+                                aba.update_cell(celula.row, 9, nova_cidade)
 
-                            aba.update_cell(cel.row, 1, novo_qtd)
-                            aba.update_cell(cel.row, 3, nova_dt_sol)
-                            aba.update_cell(cel.row, 5, nova_dt_emi)
-                            aba.update_cell(cel.row, 7, nova_prioridade)
-                            aba.update_cell(cel.row, 9, nova_cidade)
-
-                            st.success(
-                                "✅ Atualizado na planilha com sucesso! (Nenhum"
-                                " aviso externo foi disparado)."
-                            )
-                            del st.session_state["nota_gerenciar"]
-
-                            obter_dados_gerais.clear()
-                            time.sleep(4)
-                            st.rerun()
+                                st.success(
+                                    f"✅ Registro da Nota {n['Nota']} atualizado"
+                                    " com sucesso!"
+                                )
+                                obter_dados_gerais.clear()
+                                time.sleep(2)
+                                st.rerun()
+                            else:
+                                st.error(
+                                    "❌ Não foi possível localizar a linha"
+                                    " correspondente na planilha."
+                                )
                         except Exception as e:
-                            st.error(f"Erro ao atualizar: {e}")
+                            st.error(f"Erro ao atualizar planilha: {e}")
 
-        st.markdown("---")
-
-        if st.button(
-            "🗑️ Excluir Registro Definitivamente",
-            type="primary",
-            use_container_width=True,
-        ):
-            try:
-                planilha = conectar_planilha()
-                aba = planilha.worksheet(n["Transportadora"])
-                cel = aba.find(n["Nota"])
-                aba.delete_rows(cel.row)
-                st.success("✅ Apagado com sucesso!")
-                del st.session_state["nota_gerenciar"]
-
-                obter_dados_gerais.clear()
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao excluir: {e}")
+        with st.expander("🗑️ Excluir Registro", expanded=False):
+            st.warning(
+                f"⚠️ Atenção: A exclusão da Nota **{n['Nota']}** na"
+                f" transportadora **{n['Transportadora']}** é irreversível!"
+            )
+            if st.button(
+                "❌ Confirmar Exclusão Definitiva", use_container_width=True
+            ):
+                with st.spinner("Excluindo registro..."):
+                    try:
+                        planilha = conectar_planilha()
+                        aba = planilha.worksheet(n["Transportadora"])
+                        celula = aba.find(n["Nota"])
+                        if celula:
+                            aba.delete_rows(celula.row)
+                            st.success(
+                                f"✅ Nota {n['Nota']} excluída com sucesso!"
+                            )
+                            obter_dados_gerais.clear()
+                            if "nota_gerenciar" in st.session_state:
+                                del st.session_state["nota_gerenciar"]
+                            time.sleep(2)
+                            st.rerun()
+                        else:
+                            st.error(
+                                "❌ Não foi possível localizar a nota na"
+                                " planilha."
+                            )
+                    except Exception as e:
+                        st.error(f"Erro ao excluir registro: {e}")
 
 elif aba_selecionada == "🔔 Cobrar Atrasos":
-    st.markdown("### 🔔 Disparar Cobrança (Notas Atrasadas)")
+    st.markdown("### 🔔 Gestão e Cobrança de Atrasos")
     st.markdown(
-        "Lista automática de notas aguardando coleta há **1 dia ou mais** na"
-        " filial."
+        "Monitore pendências e envie lembretes diretos para as transportadoras."
     )
 
-    hoje_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    hoje_dt = datetime.now().date()
+    pendentes = [d for d in dados_globais if d["Data_Coleta"] == ""]
 
-    atrasadas = []
-    for d in dados_globais:
-        if d["Data_Coleta"] == "":
-            if d.get("Data_Solicitacao"):
-                try:
-                    data_sol_dt = datetime.strptime(
-                        d["Data_Solicitacao"], "%d/%m/%Y"
-                    )
-                    dias_parado = (hoje_dt - data_sol_dt).days
-                    if dias_parado >= 1:
-                        d["Dias_Atraso"] = dias_parado
-                        atrasadas.append(d)
-                except Exception as e:
-                    st.sidebar.warning(
-                        f"⚠️ Erro de data na nota {d['Nota']}"
-                        f" ({d['Transportadora']}). Verifique a formatação na"
-                        " planilha."
-                    )
+    if not pendentes:
+        st.success("🎉 Nenhuma carga pendente de coleta no momento!")
+    else:
+        st.info(f"📋 Total de cargas pendentes: **{len(pendentes)}**")
 
-    if atrasadas:
-        with st.form("form_cobranca"):
-            checkboxes_cobranca = {}
-            for p in sorted(atrasadas, key=lambda x: x["Transportadora"]):
-                prefixo_urg = "🚨 " if "URGENTE" in p["Prioridade"] else ""
-                label = (
-                    f"[{p['Transportadora']}] {prefixo_urg}Nota: {p['Nota']} —"
-                    f" {p['QTD']} vol ({p['Dias_Atraso']} dias aguardando)"
-                )
-                checkboxes_cobranca[p["Nota"]] = st.checkbox(label)
+        por_transp = {}
+        for p in pendentes:
+            por_transp.setdefault(p["Transportadora"], []).append(p)
 
-            st.markdown("---")
-            btn_cobrar = st.form_submit_button(
-                "🔔 Enviar Lembretes Selecionados", use_container_width=True
+        for transp, itens in por_transp.items():
+            st.markdown(
+                f"#### 🚛 Transportadora: **{transp}** ({len(itens)}"
+                " pendência(s))"
             )
 
-            if btn_cobrar:
-                notas_selecionadas = [
-                    nota
-                    for nota, marcada in checkboxes_cobranca.items()
-                    if marcada
-                ]
-                if not notas_selecionadas:
-                    st.warning("⚠️ Marque pelo menos uma nota na caixa de seleção.")
-                else:
-                    with st.spinner("Disparando e-mails de cobrança..."):
+            for item in itens:
+                dt_sol = parse_data(item["Data_Solicitacao"])
+                dias_atraso = (hoje_dt - dt_sol).days if dt_sol else 0
+                badge = (
+                    "🚨 URGENTE"
+                    if "URGENTE" in item["Prioridade"]
+                    else "Normal"
+                )
+
+                st.write(
+                    f"- **Nota {item['Nota']}** | Vol: {item['QTD']} | Destino:"
+                    f" {item['Cidade_Destino']} | Solicitado em:"
+                    f" {item['Data_Solicitacao']} ({dias_atraso} dia(s)"
+                    f" atrás) | Prioridade: {badge}"
+                )
+
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if transp in ["TRANSCHERRER", "GENEROSO"]:
+                    if st.button(
+                        f"📧 Reenviar Lembrete por E-mail ({transp})",
+                        key=f"cobrar_email_{transp}",
+                    ):
                         sucessos = 0
-                        falhas = 0
-                        for nota in notas_selecionadas:
-                            dados_nota = next(
-                                item for item in atrasadas if item["Nota"] == nota
-                            )
-                            transp = dados_nota["Transportadora"]
-
-                            if transp == "FL":
-                                st.warning(
-                                    f"⚠️ A Nota {nota} é da FL. Esta"
-                                    " transportadora deve ser cobrada"
-                                    " manualmente pelo Teams."
-                                )
-                                continue
-                            if transp == "JARBAS":
-                                st.warning(
-                                    f"⚠️ A Nota {nota} é da Jarbas. As"
-                                    " cobranças devem ser verificadas por eles"
-                                    " no Painel Espelho."
-                                )
-                                continue
-
-                            res = disparar_email_silencioso(
+                        for item in itens:
+                            if disparar_email_silencioso(
                                 transp,
-                                nota,
-                                dados_nota["QTD"],
+                                item["Nota"],
+                                item["QTD"],
                                 lembrete=True,
-                                prioridade=dados_nota["Prioridade"],
-                            )
-                            if res:
+                                prioridade=item["Prioridade"],
+                            ):
                                 sucessos += 1
-                            else:
-                                falhas += 1
-
                         if sucessos > 0:
                             st.success(
-                                f"✅ {sucessos} e-mail(s) de cobrança enviado(s)"
-                                " com sucesso!"
+                                f"✅ Lembrete disparado para {transp}"
+                                f" ({sucessos} e-mail(s) enviado(s))."
                             )
-                        if falhas > 0:
+                        else:
                             st.error(
-                                f"❌ {falhas} e-mail(s) não puderam ser enviados."
-                                " Verifique se as credenciais de e-mail estão"
-                                " configuradas nos secrets."
+                                f"❌ Não foi possível disparar e-mail para"
+                                f" {transp}."
                             )
-    else:
-        st.success("🎉 Nenhuma nota atrasada pendente de cobrança no momento!")
+                elif transp == "FL":
+                    st.info(
+                        "💡 A cobrança para a **FL** deve ser realizada via"
+                        " Teams."
+                    )
+                elif transp == "JARBAS":
+                    st.info(
+                        "💡 A **Jarbas** acompanha o painel em tempo real."
+                    )
+
+            with col_btn2:
+                msg_cobranca = (
+                    f"Olá, equipe da {transp}!\nPossuímos as seguintes coletas"
+                    " pendentes em nosso galpão (Speedmax Campos):\n"
+                )
+                for item in itens:
+                    msg_cobranca += (
+                        f"• Nota: {item['Nota']} ({item['QTD']} vol) - Destino:"
+                        f" {item['Cidade_Destino']}\n"
+                    )
+                msg_cobranca += (
+                    "\nPodem nos confirmar a previsão de retirada dessas"
+                    " cargas? Obrigado!"
+                )
+
+                st.text_area(
+                    f"Copiar texto de cobrança ({transp}):",
+                    value=msg_cobranca,
+                    height=120,
+                    key=f"text_cobranca_{transp}",
+                )
+
+            st.markdown("---")

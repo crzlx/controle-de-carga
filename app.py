@@ -14,7 +14,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 st.set_page_config(page_title="Coletas Speedmax", page_icon="🚚", layout="wide")
 
-# Link Base da Planilha no Google Sheets
+# Link Base do Google Sheets (Fonte Única de Dados)
 PLANILHA_URL = "https://docs.google.com/spreadsheets/d/1zjiGtrzY64rJQnU3DdxqivFtgUPxb_YsC-1PBFC2MsU/edit?usp=sharing"
 
 TRANSPORTADORAS = ["JARBAS", "TRANSCHERRER", "FL", "GENEROSO"]
@@ -109,14 +109,15 @@ def parse_data(data_str):
         return None
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def obter_dados_gerais():
+    """Conecta à planilha base e puxa todos os registros das abas."""
     planilha = conectar_planilha()
     dados = []
     for transp in TRANSPORTADORAS:
         try:
             aba = planilha.worksheet(transp)
-            linhas = aba.get_all_values()[1:]
+            linhas = aba.get_all_values()[1:]  # Ignora o cabeçalho
 
             for l in linhas:
                 while len(l) < 11:
@@ -149,12 +150,9 @@ def obter_dados_gerais():
                         "Hora_Coleta": l[10].strip() if l[10].strip() else "-",
                     })
         except gspread.exceptions.WorksheetNotFound:
-            st.error(
-                f"❌ Aba não encontrada no Google Sheets: '{transp}'. Verifique"
-                " se o nome tem espaços ocultos."
-            )
+            st.error(f"❌ Aba '{transp}' não encontrada no Google Sheets.")
         except Exception as e:
-            st.error(f"❌ Erro ao ler dados da transportadora {transp}: {e}")
+            st.error(f"❌ Erro ao ler dados da aba {transp}: {e}")
 
     return dados
 
@@ -162,7 +160,7 @@ def obter_dados_gerais():
 try:
     dados_globais = obter_dados_gerais()
 except Exception as e:
-    st.error(f"Erro ao conectar com o Google Sheets: {e}")
+    st.error(f"Erro de conexão com a planilha base: {e}")
     dados_globais = []
 
 
@@ -201,7 +199,7 @@ def abrir_chat_ia(dados_para_ia):
                         prompt = f"""
                         Você é o Alessandro IA, assistente logístico avançado e versátil da Speedmax (Campos dos Goytacazes). Hoje é {hoje}.
                         Você ajuda com o galpão, vendas, clientes e redação profissional.
-                        DADOS DE CARGAS PENDENTES HOJE: {json.dumps(pendentes, ensure_ascii=False)}
+                        DADOS DE CARGAS PENDENTES HOJE (PUXADOS DA PLANILHA BASE): {json.dumps(pendentes, ensure_ascii=False)}
                         HISTÓRICO RECENTE: {historico}
                         Responda à pergunta do usuário de forma útil e direta: "{nova_msg}"
                         """
@@ -212,25 +210,7 @@ def abrir_chat_ia(dados_para_ia):
                         )
 
                     except Exception as e:
-                        erro_str = str(e).lower()
-                        if (
-                            "429" in erro_str
-                            or "quota" in erro_str
-                            or "exhausted" in erro_str
-                        ):
-                            erro_msg = (
-                                "⏳ **Muitas mensagens rápidas da equipe!** O"
-                                " limite do plano gratuito ativou o modo de"
-                                " segurança. Por favor, espere **1 minutinho**"
-                                " e mande a mensagem de novo!"
-                            )
-                        else:
-                            erro_msg = f"❌ Ocorreu um erro na IA: {e}"
-
-                        st.error(erro_msg)
-                        st.session_state.chat_history.append(
-                            {"role": "assistant", "content": erro_msg}
-                        )
+                        st.error(f"❌ Ocorreu um erro na IA: {e}")
 
 
 with st.sidebar:
@@ -315,7 +295,7 @@ if aba_selecionada == "📦 Movimentação":
                 "Data de Emissão da Nota", format="DD/MM/YYYY"
             )
         enviar_nova = st.form_submit_button(
-            "Registrar Nota", use_container_width=True
+            "Registrar Nota na Planilha Base", use_container_width=True
         )
 
         if enviar_nova:
@@ -336,6 +316,7 @@ if aba_selecionada == "📦 Movimentação":
                     )
                     formatada_emissao = data_emissao.strftime("%d/%m/%Y")
 
+                    # Grava a nova linha diretamente no Google Sheets
                     aba_sel.append_row([
                         qtd,
                         nota_nova,
@@ -349,7 +330,7 @@ if aba_selecionada == "📦 Movimentação":
                         hora_atual,
                         "",
                     ])
-                    st.success(f"✅ Nota {nota_nova} registrada!")
+                    st.success(f"✅ Nota {nota_nova} gravada na planilha base!")
 
                     obter_dados_gerais.clear()
 
@@ -360,8 +341,8 @@ if aba_selecionada == "📦 Movimentação":
                         )
                     elif transp_nova == "JARBAS":
                         st.info(
-                            "🚛 **ATENÇÃO:** A Jarbas já acompanha essa nova"
-                            " coleta em tempo real pelo Painel Espelho!"
+                            "🚛 **ATENÇÃO:** A Jarbas acompanha em tempo real"
+                            " pela planilha!"
                         )
                     else:
                         resultado_email = disparar_email_silencioso(
@@ -370,15 +351,13 @@ if aba_selecionada == "📦 Movimentação":
                             qtd,
                             prioridade=prioridade,
                         )
-                        if resultado_email is True:
+                        if resultado_email:
                             st.info(f"📧 E-mail disparado para {transp_nova}.")
-                        else:
-                            st.warning("⚠️ E-mail não configurado.")
 
-                    time.sleep(4)
+                    time.sleep(2)
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erro no banco de dados: {e}")
+                    st.error(f"Erro ao salvar na planilha: {e}")
 
     st.markdown("---")
     st.header("✅ Confirmar Coleta em Lote")
@@ -402,7 +381,7 @@ if aba_selecionada == "📦 Movimentação":
     if pendentes_transp:
         with st.form("form_baixa"):
             st.markdown(
-                f"📦 **Notas pendentes na expedição ({transp_baixa}):**"
+                f"📦 **Notas pendentes na planilha ({transp_baixa}):**"
             )
             checkboxes_notas = {}
             for p in pendentes_transp:
@@ -430,7 +409,7 @@ if aba_selecionada == "📦 Movimentação":
                 if not notas_selecionadas:
                     st.warning("⚠️ Marque pelo menos uma nota.")
                 else:
-                    with st.spinner("Sincronizando..."):
+                    with st.spinner("Atualizando planilha base..."):
                         try:
                             fuso_br = timezone(timedelta(hours=-3))
                             hora_baixa_atual = datetime.now(fuso_br).strftime(
@@ -459,21 +438,18 @@ if aba_selecionada == "📦 Movimentação":
                                     celula.row, 11, hora_baixa_atual
                                 )
 
-                            st.success(
-                                "✅ Baixa confirmada perfeitamente às"
-                                f" {hora_baixa_atual}!"
-                            )
+                            st.success("✅ Baixas sincronizadas na planilha!")
 
                             obter_dados_gerais.clear()
-                            time.sleep(4)
+                            time.sleep(2)
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Erro na sincronização: {e}")
+                            st.error(f"Erro ao atualizar planilha: {e}")
     else:
-        st.success(f"🎉 Expedição limpa para a {transp_baixa}.")
+        st.success(f"🎉 Nenhuma pendência encontrada para {transp_baixa}.")
 
 elif aba_selecionada == "📊 Painel & Relatórios":
-    st.markdown("### 📊 Dashboard Analítico")
+    st.markdown("### 📊 Dashboard Analítico (Dados em Tempo Real)")
     with st.expander("📅 Filtrar Dados por Período", expanded=True):
         c_ini, c_fim = st.columns(2)
         filtro_inicio = c_ini.date_input(
@@ -487,7 +463,7 @@ elif aba_selecionada == "📊 Painel & Relatórios":
         if not filtro_inicio or not filtro_fim:
             st.warning("⚠️ Selecione as datas Inicial e Final.")
         else:
-            with st.spinner("Processando..."):
+            with st.spinner("Processando dados da planilha..."):
                 hoje_dt = datetime.now().replace(
                     hour=0, minute=0, second=0, microsecond=0
                 )
@@ -518,11 +494,6 @@ elif aba_selecionada == "📊 Painel & Relatórios":
                                 dias_demora
                             )
 
-                pendentes_gerais = sorted(
-                    pendentes_gerais,
-                    key=lambda x: 0 if "URGENTE" in x["Prioridade"] else 1,
-                )
-
                 st.markdown("---")
                 c1, c2, c3 = st.columns(3)
                 c1.metric("📦 Separadas no Período", len(lancadas_periodo))
@@ -530,76 +501,7 @@ elif aba_selecionada == "📊 Painel & Relatórios":
                 c3.metric("⏳ Pendentes Hoje", len(pendentes_gerais))
 
                 st.markdown("---")
-                st.subheader("🏆 Ranking de Agilidade (Média Histórica)")
-                ranking_dados = []
-                for transp, tempos in tempos_coleta.items():
-                    media = (
-                        sum(tempos) / len(tempos) if tempos else "Sem dados"
-                    )
-                    ranking_dados.append({
-                        "Transportadora": transp,
-                        "Dias para Coleta": (
-                            round(media, 1)
-                            if isinstance(media, (int, float))
-                            else media
-                        ),
-                    })
-
-                ranking_dados.sort(
-                    key=lambda x: (
-                        x["Dias para Coleta"]
-                        if isinstance(x["Dias para Coleta"], float)
-                        else 999
-                    )
-                )
-                cols_rank = st.columns(4)
-                for idx, r in enumerate(ranking_dados):
-                    with cols_rank[idx]:
-                        st.info(
-                            f"**{r['Transportadora']}**\n\nTempo:"
-                            f" {r['Dias para Coleta']}"
-                            f" {'dias' if isinstance(r['Dias para Coleta'], float) else ''}"
-                        )
-
-                st.markdown("---")
-                st.subheader("🚛 Fila de Aguardo")
-                if pendentes_gerais:
-                    lista_sla = []
-                    for p in pendentes_gerais:
-                        item = {
-                            "Transportadora": p["Transportadora"],
-                            "Nota": p["Nota"],
-                            "QTD": p["QTD"],
-                            "Prioridade": (
-                                "🚨 URGENTE"
-                                if "URGENTE" in p["Prioridade"]
-                                else "Normal"
-                            ),
-                        }
-                        try:
-                            data_sol_dt = datetime.strptime(
-                                p["Data_Solicitacao"], "%d/%m/%Y"
-                            )
-                            dias_parado = (hoje_dt - data_sol_dt).days
-                            if dias_parado == 0:
-                                item["Atraso"] = "🟢 Hoje"
-                            elif dias_parado == 1:
-                                item["Atraso"] = "🟡 1 dia"
-                            elif dias_parado > 1:
-                                item["Atraso"] = f"🔴 {dias_parado} dias"
-                            else:
-                                item["Atraso"] = "🟢 Hoje"
-                        except Exception:
-                            item["Atraso"] = "⚪ N/A"
-                        lista_sla.append(item)
-                    st.dataframe(
-                        lista_sla, use_container_width=True, hide_index=True
-                    )
-                else:
-                    st.success("🎉 Nenhuma pendência!")
-
-                st.markdown("---")
-                st.subheader("📋 Resumo do Período (Copiar e Colar)")
+                st.subheader("📋 Resumo do Período")
                 texto_relatorio = (
                     "📊 *RELATÓRIO DE COLETAS"
                     f" ({filtro_inicio.strftime('%d/%m')} até"
@@ -617,112 +519,36 @@ elif aba_selecionada == "📊 Painel & Relatórios":
                             f"\n🚛 *{transp}* ({len(notas)}):\n  ↳"
                             f" {', '.join(notas)}\n"
                         )
-                else:
-                    texto_relatorio += "Nenhuma coleta.\n"
-                texto_relatorio += (
-                    "\n"
-                    + "-" * 30
-                    + f"\n\n⏳ *PENDÊNCIAS AGORA:* {len(pendentes_gerais)}"
-                    " nota(s)\n"
-                )
-                if pendentes_gerais:
-                    agrupado_pendentes = {}
-                    for d in pendentes_gerais:
-                        agrupado_pendentes.setdefault(
-                            d["Transportadora"], []
-                        ).append(
-                            f"{'[URGENTE] ' if 'URGENTE' in d['Prioridade'] else ''}Nº"
-                            f" {d['Nota']} ({d['QTD']} vol - emissão:"
-                            f" {d['Data_Emissao_Nota']} - req:"
-                            f" {d['Data_Solicitacao']})"
-                        )
-                    for transp, notas in agrupado_pendentes.items():
-                        texto_relatorio += f"\n⚠️ *{transp}* ({len(notas)}):\n"
-                        for n in notas:
-                            texto_relatorio += f"    ↳ {n}\n"
 
                 st.text_area(
-                    "Texto Copiável:", value=texto_relatorio, height=300
-                )
-
-                output = io.StringIO()
-                writer = csv.DictWriter(
-                    output,
-                    fieldnames=[
-                        "Transportadora",
-                        "QTD",
-                        "Nota",
-                        "Data_Solicitacao",
-                        "Data_Coleta",
-                        "Data_Emissao_Nota",
-                        "Usuario_Lancamento",
-                        "Prioridade",
-                        "Usuario_Baixa",
-                        "Cidade_Destino",
-                        "Hora_Solicitacao",
-                        "Hora_Coleta",
-                    ],
-                )
-                writer.writeheader()
-                writer.writerows(dados_globais)
-                st.download_button(
-                    "📥 Baixar Histórico em CSV",
-                    data=output.getvalue().encode("utf-8"),
-                    file_name="relatorio.csv",
-                    mime="text/csv",
-                    use_container_width=True,
+                    "Texto Copiável:", value=texto_relatorio, height=250
                 )
 
 elif aba_selecionada == "🔍 Consulta Rápida":
     st.markdown("### 🔍 Pesquisa & Rastreabilidade")
     nota_busca = st.text_input("Digite o Número da Nota:", autocomplete="off")
-    if st.button("Procurar Nota", use_container_width=True):
+    if st.button("Procurar na Planilha Base", use_container_width=True):
         if nota_busca:
-            with st.spinner("Buscando rastros..."):
-                encontradas = [
-                    d for d in dados_globais if d["Nota"] == nota_busca.strip()
-                ]
-                if encontradas:
-                    for nota in encontradas:
-                        status = (
-                            "✅ Já Coletada"
-                            if nota["Data_Coleta"] != ""
-                            else "⏳ Aguardando"
-                        )
-                        cor_status, cor_texto = (
-                            ("#d4edda", "#155724")
-                            if nota["Data_Coleta"] != ""
-                            else ("#fff3cd", "#856404")
-                        )
-
-                        hora_sol_info = (
-                            f" às {nota.get('Hora_Solicitacao', '-')}"
-                            if nota.get("Hora_Solicitacao", "-") != "-"
-                            else ""
-                        )
-                        hora_col_info = (
-                            f" às {nota.get('Hora_Coleta', '-')}"
-                            if nota.get("Hora_Coleta", "-") != "-"
-                            else ""
-                        )
-
-                        st.markdown(
-                            f"""
-                        <div style="background-color: {cor_status}; color: {cor_texto}; padding: 15px; border-radius: 10px; margin-top: 10px;">
-                            <h4 style="margin-top:0;">{'🚨 ' if 'URGENTE' in nota['Prioridade'] else ''}Nota: {nota['Nota']}</h4>
-                            <b>Status:</b> {status}<br><b>Transportadora:</b> {nota['Transportadora']}<br><b>Volumes:</b> {nota['QTD']}<br><b>Cidade Destino:</b> {nota['Cidade_Destino']}<br>
-                            <hr style="border-top: 1px solid {cor_texto}; opacity: 0.3;">
-                            <b>Lançado em:</b> {nota['Data_Solicitacao']}{hora_sol_info} <i>({nota['Usuario_Lancamento']})</i><br>
-                            <b>Baixado em:</b> {nota['Data_Coleta'] if nota['Data_Coleta'] != "" else "-"}{hora_col_info} <i>({nota['Usuario_Baixa']})</i>
-                        </div>
-                        """,
-                            unsafe_allow_html=True,
-                        )
-                else:
-                    st.error("❌ Nota não encontrada.")
+            encontradas = [
+                d for d in dados_globais if d["Nota"] == nota_busca.strip()
+            ]
+            if encontradas:
+                for nota in encontradas:
+                    status = (
+                        "✅ Já Coletada"
+                        if nota["Data_Coleta"] != ""
+                        else "⏳ Aguardando Coleta"
+                    )
+                    st.info(
+                        f"**Nota:** {nota['Nota']} | **Status:** {status} |"
+                        f" **Transportadora:** {nota['Transportadora']} |"
+                        f" **Destino:** {nota['Cidade_Destino']}"
+                    )
+            else:
+                st.error("❌ Nota não encontrada na planilha base.")
 
 elif aba_selecionada == "⚙️ Editar/Excluir":
-    st.markdown("### ⚙️ Localizar, Editar ou Excluir Registro")
+    st.markdown("### ⚙️ Alterar Registro na Planilha Base")
     nota_alvo = st.text_input(
         "Digite a Nota Fiscal para gerenciar:", autocomplete="off"
     )
@@ -734,207 +560,43 @@ elif aba_selecionada == "⚙️ Editar/Excluir":
             if encontradas:
                 st.session_state["nota_gerenciar"] = encontradas[0]
             else:
-                st.error("❌ Nota não encontrada.")
-                if "nota_gerenciar" in st.session_state:
-                    del st.session_state["nota_gerenciar"]
+                st.error("❌ Nota não encontrada na planilha.")
 
     if "nota_gerenciar" in st.session_state:
         n = st.session_state["nota_gerenciar"]
         st.info(
-            f"Registro Encontrado: **{n['Nota']}** ({n['Transportadora']}) -"
-            f" {n['QTD']} volumes"
+            f"Registro Localizado: **{n['Nota']}** ({n['Transportadora']})"
         )
 
-        with st.expander(
-            "✏️ Editar Informações (Atualização Interna)", expanded=True
-        ):
-            with st.form("form_editar_nota"):
-                col_e1, col_e2 = st.columns(2)
-                with col_e1:
-                    novo_qtd = st.text_input("QTD (Volumes)", value=n["QTD"])
-                    nova_prioridade = st.selectbox(
-                        "Prioridade",
-                        ["Normal", "🚨 URGENTE"],
-                        index=0 if "Normal" in n["Prioridade"] else 1,
-                    )
-                    nova_cidade = st.text_input(
-                        "Cidade Destino", value=n.get("Cidade_Destino", "-")
-                    )
-                with col_e2:
-                    nova_dt_sol = st.text_input(
-                        "Data Solicitação (DD/MM/AAAA)",
-                        value=n["Data_Solicitacao"],
-                    )
-                    nova_dt_emi = st.text_input(
-                        "Data Emissão da Nota (DD/MM/AAAA)",
-                        value=n["Data_Emissao_Nota"],
-                    )
-
-                st.markdown(
-                    "<small><i>Para alterar o número da Nota ou Transportadora,"
-                    " exclua o registro e lance novamente.</i></small>",
-                    unsafe_allow_html=True,
-                )
-                btn_salvar = st.form_submit_button(
-                    "💾 Salvar Alterações na Planilha", use_container_width=True
-                )
-
-                if btn_salvar:
-                    with st.spinner("Salvando alterações..."):
-                        try:
-                            planilha = conectar_planilha()
-                            aba = planilha.worksheet(n["Transportadora"])
-                            celula = aba.find(n["Nota"])
-                            if celula:
-                                aba.update_cell(celula.row, 1, novo_qtd)
-                                aba.update_cell(celula.row, 3, nova_dt_sol)
-                                aba.update_cell(celula.row, 5, nova_dt_emi)
-                                aba.update_cell(celula.row, 7, nova_prioridade)
-                                aba.update_cell(celula.row, 9, nova_cidade)
-
-                                st.success(
-                                    f"✅ Registro da Nota {n['Nota']} atualizado"
-                                    " com sucesso!"
-                                )
-                                obter_dados_gerais.clear()
-                                time.sleep(2)
-                                st.rerun()
-                            else:
-                                st.error(
-                                    "❌ Não foi possível localizar a linha"
-                                    " correspondente na planilha."
-                                )
-                        except Exception as e:
-                            st.error(f"Erro ao atualizar planilha: {e}")
-
-        with st.expander("🗑️ Excluir Registro", expanded=False):
-            st.warning(
-                f"⚠️ Atenção: A exclusão da Nota **{n['Nota']}** na"
-                f" transportadora **{n['Transportadora']}** é irreversível!"
+        with st.form("form_editar_nota"):
+            novo_qtd = st.text_input("QTD (Volumes)", value=n["QTD"])
+            nova_cidade = st.text_input(
+                "Cidade Destino", value=n.get("Cidade_Destino", "-")
             )
-            if st.button(
-                "❌ Confirmar Exclusão Definitiva", use_container_width=True
-            ):
-                with st.spinner("Excluindo registro..."):
-                    try:
-                        planilha = conectar_planilha()
-                        aba = planilha.worksheet(n["Transportadora"])
-                        celula = aba.find(n["Nota"])
-                        if celula:
-                            aba.delete_rows(celula.row)
-                            st.success(
-                                f"✅ Nota {n['Nota']} excluída com sucesso!"
-                            )
-                            obter_dados_gerais.clear()
-                            if "nota_gerenciar" in st.session_state:
-                                del st.session_state["nota_gerenciar"]
-                            time.sleep(2)
-                            st.rerun()
-                        else:
-                            st.error(
-                                "❌ Não foi possível localizar a nota na"
-                                " planilha."
-                            )
-                    except Exception as e:
-                        st.error(f"Erro ao excluir registro: {e}")
+            btn_salvar = st.form_submit_button("💾 Salvar Alterações")
+
+            if btn_salvar:
+                planilha = conectar_planilha()
+                aba = planilha.worksheet(n["Transportadora"])
+                celula = aba.find(n["Nota"])
+                if celula:
+                    aba.update_cell(celula.row, 1, novo_qtd)
+                    aba.update_cell(celula.row, 9, nova_cidade)
+                    st.success("✅ Atualizado diretamente na planilha!")
+                    obter_dados_gerais.clear()
+                    time.sleep(2)
+                    st.rerun()
 
 elif aba_selecionada == "🔔 Cobrar Atrasos":
-    st.markdown("### 🔔 Gestão e Cobrança de Atrasos")
-    st.markdown(
-        "Monitore pendências e envie lembretes diretos para as transportadoras."
-    )
-
-    hoje_dt = datetime.now().date()
+    st.markdown("### 🔔 Gestão de Pendências da Planilha")
     pendentes = [d for d in dados_globais if d["Data_Coleta"] == ""]
-
     if not pendentes:
-        st.success("🎉 Nenhuma carga pendente de coleta no momento!")
+        st.success("🎉 Todas as cargas da planilha foram coletadas!")
     else:
-        st.info(f"📋 Total de cargas pendentes: **{len(pendentes)}**")
-
-        por_transp = {}
+        st.write(f"Total de cargas pendentes na base: **{len(pendentes)}**")
         for p in pendentes:
-            por_transp.setdefault(p["Transportadora"], []).append(p)
-
-        for transp, itens in por_transp.items():
-            st.markdown(
-                f"#### 🚛 Transportadora: **{transp}** ({len(itens)}"
-                " pendência(s))"
+            st.write(
+                f"- **[{p['Transportadora']}] Nota {p['Nota']}** | Vol:"
+                f" {p['QTD']} | Destino: {p['Cidade_Destino']} | Solicitado:"
+                f" {p['Data_Solicitacao']}"
             )
-
-            for item in itens:
-                dt_sol = parse_data(item["Data_Solicitacao"])
-                dias_atraso = (hoje_dt - dt_sol).days if dt_sol else 0
-                badge = (
-                    "🚨 URGENTE"
-                    if "URGENTE" in item["Prioridade"]
-                    else "Normal"
-                )
-
-                st.write(
-                    f"- **Nota {item['Nota']}** | Vol: {item['QTD']} | Destino:"
-                    f" {item['Cidade_Destino']} | Solicitado em:"
-                    f" {item['Data_Solicitacao']} ({dias_atraso} dia(s)"
-                    f" atrás) | Prioridade: {badge}"
-                )
-
-            col_btn1, col_btn2 = st.columns(2)
-            with col_btn1:
-                if transp in ["TRANSCHERRER", "GENEROSO"]:
-                    if st.button(
-                        f"📧 Reenviar Lembrete por E-mail ({transp})",
-                        key=f"cobrar_email_{transp}",
-                    ):
-                        sucessos = 0
-                        for item in itens:
-                            if disparar_email_silencioso(
-                                transp,
-                                item["Nota"],
-                                item["QTD"],
-                                lembrete=True,
-                                prioridade=item["Prioridade"],
-                            ):
-                                sucessos += 1
-                        if sucessos > 0:
-                            st.success(
-                                f"✅ Lembrete disparado para {transp}"
-                                f" ({sucessos} e-mail(s) enviado(s))."
-                            )
-                        else:
-                            st.error(
-                                f"❌ Não foi possível disparar e-mail para"
-                                f" {transp}."
-                            )
-                elif transp == "FL":
-                    st.info(
-                        "💡 A cobrança para a **FL** deve ser realizada via"
-                        " Teams."
-                    )
-                elif transp == "JARBAS":
-                    st.info(
-                        "💡 A **Jarbas** acompanha o painel em tempo real."
-                    )
-
-            with col_btn2:
-                msg_cobranca = (
-                    f"Olá, equipe da {transp}!\nPossuímos as seguintes coletas"
-                    " pendentes em nosso galpão (Speedmax Campos):\n"
-                )
-                for item in itens:
-                    msg_cobranca += (
-                        f"• Nota: {item['Nota']} ({item['QTD']} vol) - Destino:"
-                        f" {item['Cidade_Destino']}\n"
-                    )
-                msg_cobranca += (
-                    "\nPodem nos confirmar a previsão de retirada dessas"
-                    " cargas? Obrigado!"
-                )
-
-                st.text_area(
-                    f"Copiar texto de cobrança ({transp}):",
-                    value=msg_cobranca,
-                    height=120,
-                    key=f"text_cobranca_{transp}",
-                )
-
-            st.markdown("---")
